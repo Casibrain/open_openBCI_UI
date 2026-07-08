@@ -132,7 +132,7 @@ class ControlPanel {
         wifiBox.wifiList.activeItem = -1;
     }
 
-    public void open(){
+    public void openPanel(){
         isOpen = true;
         topNav.controlPanelCollapser.setOn();
         topNav.setDropdownMenuIsOpen(true);

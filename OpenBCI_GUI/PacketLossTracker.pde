@@ -22,9 +22,9 @@ class PacketRecord {
     }
 
     public void appendAll(List<PacketRecord> toAppend) {
-        for (PacketRecord record : toAppend) {
-            numLost += record.numLost;
-            numReceived += record.numReceived;
+        for (int i = 0; i < toAppend.size(); i++) {
+            numLost += toAppend.get(i).numLost;
+            numReceived += toAppend.get(i).numReceived;
         }
     }
 }

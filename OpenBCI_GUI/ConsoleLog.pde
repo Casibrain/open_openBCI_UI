@@ -190,11 +190,12 @@ static class ConsoleWindow extends PApplet implements Runnable {
             File file = new File (outputStream.getFilePath());
             Desktop desktop = Desktop.getDesktop();
             if (file.exists()) {
-                desktop.open(file);
+                java.lang.reflect.Method m = Desktop.class.getMethod("open", File.class);
+                m.invoke(desktop, file);
             } else {
                 println("ConsoleLog: ERROR - Unable to open console log as text file...");
             }
-        } catch (IOException e) {}
+        } catch (Exception e) {}
     }
 
     void copyFullTextToClipboard() {

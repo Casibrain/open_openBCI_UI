@@ -325,7 +325,7 @@ class TopNav {
         controlPanelCollapser.onRelease(new CallbackListener() {
             public void controlEvent(CallbackEvent theEvent) {
                if (controlPanelCollapser.isOn()) {
-                   controlPanel.open();
+                   controlPanel.openPanel();
                } else {
                    controlPanel.close();
                }
