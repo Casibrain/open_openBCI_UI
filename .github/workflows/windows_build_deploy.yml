@@ -13,6 +13,12 @@ permissions:
 
 env:
   AWS_REGION : us-east-1
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
 
 jobs:
   build:
@@ -74,7 +80,7 @@ jobs:
       shell: cmd
 
     - name: Sign
-      if: ${{ github.event_name != 'pull_request' && secrets.AZURE_KEY_VAULT_URI != '' }}
+      if: ${{ github.event_name != 'pull_request' && env.AZURE_KEY_VAULT_URI != '' }}
       run: |
         dotnet tool install --global azuresigntool
         $env:PATH = "$env:PATH;$env:USERPROFILE\.dotnet\tools"
@@ -82,7 +88,7 @@ jobs:
         mt -manifest "$workspace\release\windows\gui.manifest" -outputresource:"$workspace\application.windows64\OpenBCI_GUI.exe;#1"
         mt -manifest "$workspace\release\windows\java.manifest" -outputresource:"$workspace\application.windows64\java\bin\java.exe;#1"
         mt -manifest "$workspace\release\windows\javaw.manifest" -outputresource:"$workspace\application.windows64\java\bin\javaw.exe;#1"
-        azuresigntool sign --azure-key-vault-url "${{ secrets.AZURE_KEY_VAULT_URI }}" --azure-key-vault-client-id "${{ secrets.AZURE_CLIENT_ID }}" --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" --azure-key-vault-client-secret "${{ secrets.AZURE_CLIENT_SECRET }}" --azure-key-vault-certificate "${{ secrets.AZURE_CERT_NAME }}" --timestamp-rfc3161 http://timestamp.digicert.com --verbose "$workspace\application.windows64\OpenBCI_GUI.exe"
+        azuresigntool sign --azure-key-vault-url "$env:AZURE_KEY_VAULT_URI" --azure-key-vault-client-id "$env:AZURE_CLIENT_ID" --azure-key-vault-tenant-id "$env:AZURE_TENANT_ID" --azure-key-vault-client-secret "$env:AZURE_CLIENT_SECRET" --azure-key-vault-certificate "$env:AZURE_CERT_NAME" --timestamp-rfc3161 http://timestamp.digicert.com --verbose "$workspace\application.windows64\OpenBCI_GUI.exe"
       shell: pwsh
   
     - name: Package
@@ -90,10 +96,10 @@ jobs:
       shell: cmd
 
     - name: Configure AWS credentials
-      if: ${{ github.event_name != 'pull_request' && secrets.AWS_ROLE_TO_ASSUME != '' }}
+      if: ${{ github.event_name != 'pull_request' && env.AWS_ROLE_TO_ASSUME != '' }}
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Get Branch Names
@@ -101,7 +107,7 @@ jobs:
       uses: tj-actions/branch-names@v7
 
     - name: Store Build on AWS
-      if: ${{ github.event_name != 'pull_request' && secrets.AWS_ROLE_TO_ASSUME != '' }}
+      if: ${{ github.event_name != 'pull_request' && env.AWS_ROLE_TO_ASSUME != '' }}
       run: |
         cd ${{ github.workspace }}
         ls
