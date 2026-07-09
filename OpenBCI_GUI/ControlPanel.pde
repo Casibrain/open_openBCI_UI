@@ -230,20 +230,27 @@ class ControlPanel {
                     dataLogBoxCyton.draw(); //Drawing here allows max file size dropdown to be drawn on top
                 }
             } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
-                // Direct USB serial - show serial box and port list, no protocol picker
-                serialBox.y = dataSourceBox.y + dataSourceBox.h;
-                serialBox.draw();
-                comPortBox.y = serialBox.y + serialBox.h;
+                // Direct USB serial layout:
+                // [dataSourceBox] [channelCountBox] [comPortBox]  <- all top-aligned
+                //                 [dataLogBoxCyton]                <-紧贴channelCountBox下方
+                //                 [bfStreamerBoxCyton]             <-紧贴SessionData
+                //                 [sdBox]                          <-紧贴BrainFlow Streamer
+                channelCountBox.x = dataSourceBox.x + dataSourceBox.w;
+                channelCountBox.y = dataSourceBox.y;
+                channelCountBox.draw();
+                comPortBox.x = channelCountBox.x + channelCountBox.w;
+                comPortBox.y = channelCountBox.y;
                 comPortBox.draw();
                 comPortBox.serialList.setVisible(true);
-                channelCountBox.y = comPortBox.y + comPortBox.h;
-                channelCountBox.draw();
+                dataLogBoxCyton.x = channelCountBox.x;
                 dataLogBoxCyton.y = channelCountBox.y + channelCountBox.h;
+                dataLogBoxCyton.draw();
+                bfStreamerBoxCyton.x = channelCountBox.x;
                 bfStreamerBoxCyton.y = dataLogBoxCyton.y + dataLogBoxCyton.h;
+                bfStreamerBoxCyton.draw();
+                sdBox.x = channelCountBox.x;
                 sdBox.y = bfStreamerBoxCyton.y + bfStreamerBoxCyton.h;
                 sdBox.draw();
-                bfStreamerBoxCyton.draw();
-                dataLogBoxCyton.draw();
             } else if (eegDataSource == DATASOURCE_PLAYBACKFILE) { //when data source is from playback file
                 recentPlaybackBox.draw();
                 playbackFileBox.draw();
@@ -439,6 +446,8 @@ class DataSourceBox {
                     } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
                         controlPanel.channelCountBox.set8ChanButtonActive();
                         selectedProtocol = BoardProtocol.SERIAL;
+                        // Auto-refresh serial port list for direct USB connection
+                        controlPanel.comPortBox.refreshPortListCyton();
                     } else if (eegDataSource == DATASOURCE_GANGLION) {
                         updateToNChan(4);
                         controlPanel.interfaceBoxGanglion.resetGanglionSelectedProtocol();
@@ -561,6 +570,9 @@ class ComPortBox {
     }
 
     public void update() {
+        // Reposition internal elements when box position changes
+        serialList.setPosition(x + padding, y + padding*3 + 8);
+        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 72 + 8);
         serialList.updateMenu();
         //Allow two drawing/update cycles to pass so that overlay can be drawn
         //This lets users know that auto-scan is working and GUI is not frozen
@@ -575,6 +587,10 @@ class ComPortBox {
     }
 
     public void draw() {
+        // Reposition internal elements when box position changes
+        serialList.setPosition(x + padding, y + padding*3 + 8);
+        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 72 + 8);
+
         pushStyle();
         fill(boxColor);
         stroke(boxStrokeColor);
