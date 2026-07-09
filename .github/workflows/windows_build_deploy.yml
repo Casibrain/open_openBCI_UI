@@ -94,6 +94,14 @@ jobs:
     - name: Package
       run: python %GITHUB_WORKSPACE%\release\package.py
       shell: cmd
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: openbcigui-windows64
+        path: ${{ github.workspace }}/openbcigui_*_windows64.zip
+        retention-days: 7
+        if-no-files-found: error
 
     - name: Configure AWS credentials
       if: ${{ github.event_name != 'pull_request' && env.AWS_ROLE_TO_ASSUME != '' }}
