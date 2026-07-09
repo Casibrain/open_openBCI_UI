@@ -454,7 +454,7 @@ class FocusBar {
         y = _y;
         w = _w;
         h = _h;
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             xOffset = 22;
         } else {
             xOffset = 0;

@@ -787,7 +787,7 @@ class SessionSettings {
             w_accelerometer.cp5_widget.getController("accelDuration").getCaptionLabel().setText(accHorizScaleArray[loadAccelHorizScale]);
 
         ////////Apply Anolog Read dropdowns to Live Cyton Only
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             ////////Apply Analog Read settings
             VertScale_AR(loadAnalogReadVertScale);
                 w_analogRead.cp5_widget.getController("VertScale_AR").getCaptionLabel().setText(arVertScaleArray[loadAnalogReadVertScale]);

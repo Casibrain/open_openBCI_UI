@@ -77,7 +77,7 @@ class W_Accelerometer extends Widget {
 
     float adjustYMaxMinBasedOnSource() {
         float _yMaxMin;
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             _yMaxMin = 4.0;
         }else if (eegDataSource == DATASOURCE_GANGLION || nchan == 4) {
             _yMaxMin = 2.0;
@@ -338,7 +338,7 @@ class AccelerometerBar {
         y = _y;
         w = _w;
         h = _h;
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             xOffset = 22;
         } else {
             xOffset = 0;

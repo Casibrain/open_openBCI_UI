@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //------------------------------------------------------------------------
 //Used to check GUI version in TopNav.pde and displayed on the splash screen on startup
 String localGUIVersionString = "v6.0.0-beta.1";
-String localGUIVersionDate = "September 2023";
+String localGUIVersionDate = "2026/07/08 14:15:04";
 String guiLatestVersionGithubAPI = "https://api.github.com/repos/OpenBCI/OpenBCI_GUI/releases/latest";
 String guiLatestReleaseLocation = "https://github.com/OpenBCI/OpenBCI_GUI/releases/latest";
 Boolean guiIsUpToDate;
@@ -98,7 +98,13 @@ final int DATASOURCE_GANGLION = 1;  //looking for signal from OpenBCI board via 
 final int DATASOURCE_PLAYBACKFILE = 2;  //playback from a pre-recorded text file
 final int DATASOURCE_SYNTHETIC = 3;  //Synthetically generated data
 final int DATASOURCE_STREAMING = 5;
+final int DATASOURCE_CYTON_SERIAL = 6; //direct USB serial connection, no dongle
 public int eegDataSource = -1; //default to none of the options
+
+// Helper: returns true for both dongle-based and direct USB Cyton connections
+boolean isCytonDataSource() {
+    return eegDataSource == DATASOURCE_CYTON || eegDataSource == DATASOURCE_CYTON_SERIAL;
+}
 final static int NUM_ACCEL_DIMS = 3;
 
 enum BoardProtocol {
@@ -587,6 +593,15 @@ void initSystem() {
                 }
             }
             break;
+        case DATASOURCE_CYTON_SERIAL:
+            if(nchan == 16) {
+                currentBoard = new BoardCytonSerialDirectDaisy(openBCI_portName);
+            }
+            else {
+                currentBoard = new BoardCytonSerialDirect(openBCI_portName);
+            }
+            println("OpenBCI_GUI: Init session using Cyton Direct Serial at 921600 baud");
+            break;
         case DATASOURCE_SYNTHETIC:
             currentBoard = new BoardBrainFlowSynthetic(nchan);
             println("OpenBCI_GUI: Init session using Synthetic data source");
@@ -645,17 +660,15 @@ void initSystem() {
     abandonInit = !success; // abandon if init fails
     
     //Handle edge cases for Cyton and Cyton+Daisy users immediately after board is initialized. Fixes #954
-    if (eegDataSource == DATASOURCE_CYTON) {
+    if (isCytonDataSource()) {
         println("OpenBCI_GUI: Configuring Cyton Channel Count...");
         if (currentBoard instanceof BoardCytonSerial) {
             Pair<Boolean, String> res = ((BoardBrainFlow)currentBoard).sendCommand("c");
-            //println(res.getKey().booleanValue(), res.getValue());guiSettings
             if (res.getValue().startsWith("daisy removed")) {
                 println("OpenBCI_GUI: Daisy is physically attached, using Cyton 8 Channels instead.");
             }
         } else if (currentBoard instanceof BoardCytonSerialDaisy) {
             Pair<Boolean, String> res = ((BoardBrainFlow)currentBoard).sendCommand("C");
-            //println(res.getKey().booleanValue(), res.getValue());
             if (res.getValue().startsWith("no daisy to attach")) {
                 haltSystem();
                 outputError("User selected Cyton+Daisy, but no Daisy is attached. Please change Channel Count to 8 Channels.");
@@ -663,6 +676,7 @@ void initSystem() {
                 return;
             }
         }
+        // Direct serial boards handle their own initialization
 
         //Show a popup to inform first-time Cyton users about the FTDI buffer fix and Cyton Smoothing feature. Fixes #1026
         //Windows Users: Latest BrainFlow will automatically fix this in the background on Session Start! Fixed in #1039

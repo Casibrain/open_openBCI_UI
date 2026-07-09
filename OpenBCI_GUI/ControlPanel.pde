@@ -229,6 +229,21 @@ class ControlPanel {
                     bfStreamerBoxCyton.draw();
                     dataLogBoxCyton.draw(); //Drawing here allows max file size dropdown to be drawn on top
                 }
+            } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
+                // Direct USB serial - show serial box and port list, no protocol picker
+                serialBox.y = dataSourceBox.y + dataSourceBox.h;
+                serialBox.draw();
+                comPortBox.y = serialBox.y + serialBox.h;
+                comPortBox.draw();
+                comPortBox.serialList.setVisible(true);
+                channelCountBox.y = comPortBox.y + comPortBox.h;
+                channelCountBox.draw();
+                dataLogBoxCyton.y = channelCountBox.y + channelCountBox.h;
+                bfStreamerBoxCyton.y = dataLogBoxCyton.y + dataLogBoxCyton.h;
+                sdBox.y = bfStreamerBoxCyton.y + bfStreamerBoxCyton.h;
+                sdBox.draw();
+                bfStreamerBoxCyton.draw();
+                dataLogBoxCyton.draw();
             } else if (eegDataSource == DATASOURCE_PLAYBACKFILE) { //when data source is from playback file
                 recentPlaybackBox.draw();
                 playbackFileBox.draw();
@@ -291,7 +306,7 @@ class ControlPanel {
 
     public void fetchSessionNameTextfieldAllBoards() {
         String s = "";
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             // Store the current text field value of "Session Name" to be passed along to dataFiles
             s = dataLogBoxCyton.getSessionTextfieldString();
         } else if (eegDataSource == DATASOURCE_GANGLION) {
@@ -308,7 +323,7 @@ class ControlPanel {
     }
 
     public void setDataLoggerOutputs() {
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             // Store the current text field value of "Session Name" to be passed along to dataFiles
             dataLogger.setSessionName(controlPanel.dataLogBoxCyton.getSessionTextfieldString());
         } else if (eegDataSource == DATASOURCE_GANGLION) {
@@ -323,7 +338,7 @@ class ControlPanel {
             dataLogger.setBfWriterDefaultFolder();
         }
 
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             brainflowStreamer = bfStreamerBoxCyton.getBrainFlowStreamerString();
         } else if (eegDataSource == DATASOURCE_GANGLION) {
             brainflowStreamer = bfStreamerBoxGanglion.getBrainFlowStreamerString();
@@ -334,7 +349,7 @@ class ControlPanel {
 
     private boolean getIsBrainFlowSteamerDefaultFileOutput() {
         boolean b = false;
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             b = bfStreamerBoxCyton.getIsBrainFlowStreamerDefaultLocation();
         } else if (eegDataSource == DATASOURCE_GANGLION) {
             b = bfStreamerBoxGanglion.getIsBrainFlowStreamerDefaultLocation();
@@ -398,6 +413,7 @@ class DataSourceBox {
         // sourceList.itemHeight = 28;
         // sourceList.padding = 9;
         sourceList.addItem("CYTON (live)", DATASOURCE_CYTON);
+        sourceList.addItem("CYTON (Serial)", DATASOURCE_CYTON_SERIAL);
         sourceList.addItem("GANGLION (live)", DATASOURCE_GANGLION);
         sourceList.addItem("PLAYBACK (from file)", DATASOURCE_PLAYBACKFILE);
         sourceList.addItem("SYNTHETIC (algorithmic)", DATASOURCE_SYNTHETIC);
@@ -420,6 +436,9 @@ class DataSourceBox {
                         controlPanel.channelCountBox.set8ChanButtonActive();
                         controlPanel.interfaceBoxCyton.resetCytonSelectedProtocol();
                         controlPanel.wifiBox.setDefaultToDynamicIP();
+                    } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
+                        controlPanel.channelCountBox.set8ChanButtonActive();
+                        selectedProtocol = BoardProtocol.SERIAL;
                     } else if (eegDataSource == DATASOURCE_GANGLION) {
                         updateToNChan(4);
                         controlPanel.interfaceBoxGanglion.resetGanglionSelectedProtocol();
@@ -621,7 +640,7 @@ class ComPortBox {
         }
     }
 
-    //Refresh the Cyton Dongle list
+    //Refresh the serial port list
     public void refreshPortListCyton(){
         serialList.items.clear();
 
@@ -631,7 +650,7 @@ class ComPortBox {
 
                 LinkedList<String> comPorts = getCytonComPorts();
                 for (String comPort : comPorts) {
-                    serialList.addItem("(Cyton) " + comPort, comPort, "");
+                    serialList.addItem(comPort, comPort, "");
                 }
                 serialList.updateMenu();
                 refreshCytonDongles.getCaptionLabel().setText("REFRESH LIST");
@@ -642,23 +661,18 @@ class ComPortBox {
     }
 
     private LinkedList<String> getCytonComPorts() {
-        final String[] names = {"FT231X USB UART", "VCP"};
         final SerialPort[] comPorts = SerialPort.getCommPorts();
         LinkedList<String> results = new LinkedList<String>();
         for (SerialPort comPort : comPorts) {
-            for (String name : names) {
-                if (comPort.toString().startsWith(name)) {
-                    // on macos need to drop tty ports
-                    if (isMac() && comPort.getSystemPortName().startsWith("tty")) {
-                        continue;
-                    }
-                    String found = "";
-                    if (isMac() || isLinux()) found += "/dev/";
-                    found += comPort.getSystemPortName();
-                    println("ControlPanel: Found Cyton Dongle on COM port: " + found);
-                    results.add(found);
-                }
+            // on macos need to drop tty ports
+            if (isMac() && comPort.getSystemPortName().startsWith("tty")) {
+                continue;
             }
+            String found = "";
+            if (isMac() || isLinux()) found += "/dev/";
+            found += comPort.getSystemPortName();
+            println("ControlPanel: Found COM port: " + found + " (" + comPort.toString() + ")");
+            results.add(found);
         }
 
         return results;
@@ -1507,7 +1521,7 @@ class SessionDataBox {
 
     // True locks elements, False unlocks elements
     private void lockOutsideElements (boolean _toggle) {
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             //Cyton for Serial and WiFi (WiFi details are drawn to the right, so no need to lock)
             controlPanel.channelCountBox.lockCp5Objects(_toggle);
             if (_toggle) {
@@ -2347,7 +2361,7 @@ class BrainFlowStreamerBox {
 
     // True locks elements, False unlocks elements
     private void lockOutsideElements (boolean _toggle) {
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             //Cyton for Serial and WiFi (WiFi details are drawn to the right, so no need to lock)
             controlPanel.channelCountBox.lockCp5Objects(_toggle);
             if (_toggle) {
@@ -2963,7 +2977,10 @@ class InitBox {
                 return;
             } else if (eegDataSource == DATASOURCE_CYTON && selectedProtocol == BoardProtocol.SERIAL && openBCI_portName == "N/A") { //if data source == normal && if no serial port selected OR no SD setting selected
                 outputWarn("No Serial/COM port selected. Attempting to AUTO-CONNECT to Cyton.");
-                controlPanel.comPortBox.attemptAutoConnectCyton();   
+                controlPanel.comPortBox.attemptAutoConnectCyton();
+                return;
+            } else if (eegDataSource == DATASOURCE_CYTON_SERIAL && openBCI_portName == "N/A") {
+                outputWarn("No Serial/COM port selected. Please select a serial port and retry.");
                 return;
             } else if (eegDataSource == DATASOURCE_CYTON && selectedProtocol == BoardProtocol.WIFI && wifi_portName == "N/A" && controlPanel.getWifiSearchStyle() == controlPanel.WIFI_DYNAMIC) {
                 outputWarn("No Wifi Shield selected. Please select your Wifi Shield and retry system initiation.");

@@ -75,15 +75,31 @@ def update_timestamp():
     with open(main_file, 'w') as sketch_file:
         sketch_file.writelines(data)
 
+def find_processing_java():
+    # Check if processing-java is already on PATH
+    if shutil.which("processing-java"):
+        return "processing-java"
+    # Fall back to the bundled script in release/mac/
+    bundled = os.path.join(os.path.dirname(__file__), LOCAL_OS.lower(), "processing-java")
+    if LOCAL_OS == MAC:
+        bundled = os.path.join(os.path.dirname(__file__), "mac", "processing-java")
+    elif LOCAL_OS == WINDOWS:
+        bundled = os.path.join(os.path.dirname(__file__), "windows", "processing-java.exe")
+    elif LOCAL_OS == LINUX:
+        bundled = os.path.join(os.path.dirname(__file__), "linux", "processing-java")
+    if os.path.isfile(bundled):
+        return bundled
+    sys.exit("ERROR: processing-java not found. Install Processing 4 or run from the release/ directory.")
+
 def build():
     # unfortunately, processing-java always returns exit code 1,
     # so we can't reliably check for success or failure
     # https://github.com/processing/processing/issues/5468
-    
+
     sketch = find_sketch_directory()
     flavor = flavors[LOCAL_OS]
     print ("Using sketch: " + sketch)
-    subprocess.check_call(["processing-java", "--sketch=" + sketch, "--output=" +  os.path.join(os.getcwd(), flavor), "--export"])
+    subprocess.check_call([find_processing_java(), "--sketch=" + sketch, "--output=" +  os.path.join(os.getcwd(), flavor), "--export"])
 
 def delete_source_directory():
     build_directory = os.path.join(os.getcwd(), flavors[LOCAL_OS])

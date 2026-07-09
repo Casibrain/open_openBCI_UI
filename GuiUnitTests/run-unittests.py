@@ -15,6 +15,15 @@ files_to_unittest = [
     "TimeTrackingQueue.pde"
 ]
 
+def find_processing_java():
+    if shutil.which("processing-java"):
+        return "processing-java"
+    bundled = os.path.join(os.path.dirname(__file__), "..", "release", "mac", "processing-java")
+    if os.path.isfile(bundled):
+        return os.path.abspath(bundled)
+    print("ERROR: processing-java not found. Install Processing 4 or run from the repo root.")
+    exit(1)
+
 def main ():
     origin_path = "OpenBCI_GUI"
     sketch_dir = "GuiUnitTests"
@@ -40,7 +49,7 @@ def main ():
         dir_list = os.listdir(sketch_dir)
         print("Files and directories in '", sketch_dir, "' :")
         print(dir_list)
-        subprocess.run(["processing-java", "--force", "--sketch=" + sketch_dir, "--run"])
+        subprocess.run([find_processing_java(), "--force", "--sketch=" + sketch_dir, "--run"])
     except Exception as e:
         print(e)
         delete_files(sketch_dir)

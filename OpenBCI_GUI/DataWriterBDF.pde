@@ -235,7 +235,7 @@ public class DataWriterBDF {
                     }
                 }
             }
-            if (eegDataSource == DATASOURCE_CYTON) {
+            if (isCytonDataSource()) {
                 for (int i = 0; i < nbAux; i++) {
                     for (int j = 0; j < fs_Hz; j++) {
                         for (int k = 0; k < 3; k++) {
@@ -622,7 +622,7 @@ public class DataWriterBDF {
       * @returns {int} - The number of signals in the header.
       */
     private int getNbSignals() {
-        if (eegDataSource == DATASOURCE_CYTON) {
+        if (isCytonDataSource()) {
             return nbChan + nbAux + nbAnnotations;
         } else {
             return nbChan + nbAnnotations;
@@ -935,43 +935,43 @@ public class DataWriterBDF {
             writeString(padStringRight(Integer.toString(getNbSignals()),BDF_HEADER_SIZE_NUMBER_SIGNALS), o);
 
             writeStringArrayWithPaddingTimes(labelsEEG, BDF_HEADER_NS_SIZE_LABEL, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(labelsAux, BDF_HEADER_NS_SIZE_LABEL, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(labelsAux, BDF_HEADER_NS_SIZE_LABEL, o);
             writeStringArrayWithPaddingTimes(labelsAnnotations, BDF_HEADER_NS_SIZE_LABEL, o);
 
             writeStringArrayWithPaddingTimes(transducerEEG, BDF_HEADER_NS_SIZE_TRANSDUCER_TYPE, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(transducerAux, BDF_HEADER_NS_SIZE_TRANSDUCER_TYPE, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(transducerAux, BDF_HEADER_NS_SIZE_TRANSDUCER_TYPE, o);
             writeStringArrayWithPaddingTimes(transducerAnnotations, BDF_HEADER_NS_SIZE_TRANSDUCER_TYPE, o);
 
             writeStringArrayWithPaddingTimes(physicalDimensionEEG, BDF_HEADER_NS_SIZE_PHYSICAL_DIMENSION, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(physicalDimensionAux, BDF_HEADER_NS_SIZE_PHYSICAL_DIMENSION, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(physicalDimensionAux, BDF_HEADER_NS_SIZE_PHYSICAL_DIMENSION, o);
             writeStringArrayWithPaddingTimes(physicalDimensionAnnotations, BDF_HEADER_NS_SIZE_PHYSICAL_DIMENSION, o);
 
             writeStringArrayWithPaddingTimes(physicalMinimumEEG, BDF_HEADER_NS_SIZE_PHYSICAL_MINIMUM, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(physicalMinimumAux, BDF_HEADER_NS_SIZE_PHYSICAL_MINIMUM, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(physicalMinimumAux, BDF_HEADER_NS_SIZE_PHYSICAL_MINIMUM, o);
             writeStringArrayWithPaddingTimes(physicalMinimumAnnotations, BDF_HEADER_NS_SIZE_PHYSICAL_MINIMUM, o);
 
             writeStringArrayWithPaddingTimes(physicalMaximumEEG, BDF_HEADER_NS_SIZE_PHYSICAL_MAXIMUM, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(physicalMaximumAux, BDF_HEADER_NS_SIZE_PHYSICAL_MAXIMUM, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(physicalMaximumAux, BDF_HEADER_NS_SIZE_PHYSICAL_MAXIMUM, o);
             writeStringArrayWithPaddingTimes(physicalMaximumAnnotations, BDF_HEADER_NS_SIZE_PHYSICAL_MAXIMUM, o);
 
             writeStringArrayWithPaddingTimes(digitalMinimumEEG, BDF_HEADER_NS_SIZE_DIGITAL_MINIMUM, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(digitalMinimumAux, BDF_HEADER_NS_SIZE_DIGITAL_MINIMUM, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(digitalMinimumAux, BDF_HEADER_NS_SIZE_DIGITAL_MINIMUM, o);
             writeStringArrayWithPaddingTimes(digitalMinimumAnnotations, BDF_HEADER_NS_SIZE_DIGITAL_MINIMUM, o);
 
             writeStringArrayWithPaddingTimes(digitalMaximumEEG, BDF_HEADER_NS_SIZE_DIGITAL_MAXIMUM, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(digitalMaximumAux, BDF_HEADER_NS_SIZE_DIGITAL_MAXIMUM, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(digitalMaximumAux, BDF_HEADER_NS_SIZE_DIGITAL_MAXIMUM, o);
             writeStringArrayWithPaddingTimes(digitalMaximumAnnotations, BDF_HEADER_NS_SIZE_DIGITAL_MAXIMUM, o);
 
             writeStringArrayWithPaddingTimes(prefilteringEEG, BDF_HEADER_NS_SIZE_PREFILTERING, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(prefilteringAux, BDF_HEADER_NS_SIZE_PREFILTERING, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(prefilteringAux, BDF_HEADER_NS_SIZE_PREFILTERING, o);
             writeStringArrayWithPaddingTimes(prefilteringAnnotations, BDF_HEADER_NS_SIZE_PREFILTERING, o);
 
             writeStringArrayWithPaddingTimes(nbSamplesPerDataRecordEEG, BDF_HEADER_NS_SIZE_NR, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(nbSamplesPerDataRecordAux, BDF_HEADER_NS_SIZE_NR, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(nbSamplesPerDataRecordAux, BDF_HEADER_NS_SIZE_NR, o);
             writeStringArrayWithPaddingTimes(nbSamplesPerDataRecordAnnotations, BDF_HEADER_NS_SIZE_NR, o);
 
             writeStringArrayWithPaddingTimes(reservedEEG, BDF_HEADER_NS_SIZE_RESERVED, o);
-            if (eegDataSource == DATASOURCE_CYTON) writeStringArrayWithPaddingTimes(reservedAux, BDF_HEADER_NS_SIZE_RESERVED, o);
+            if (isCytonDataSource()) writeStringArrayWithPaddingTimes(reservedAux, BDF_HEADER_NS_SIZE_RESERVED, o);
             writeStringArrayWithPaddingTimes(reservedAnnotations, BDF_HEADER_NS_SIZE_RESERVED, o);
 
             // println("writeHeader: done...");
