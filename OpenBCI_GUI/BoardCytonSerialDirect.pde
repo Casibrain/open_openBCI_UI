@@ -236,8 +236,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public int[] getEXGChannels() {
+        // Return 0-based indices to match our data array layout
+        // processNewData() uses exgChannels[Ichan] to index into the data array
         int[] channels = new int[NUM_EEG_CHANNELS];
-        for (int i = 0; i < NUM_EEG_CHANNELS; i++) channels[i] = i + 1;
+        for (int i = 0; i < NUM_EEG_CHANNELS; i++) channels[i] = i;
         return channels;
     }
 
@@ -405,6 +407,15 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
         if (packetCount % 500 == 0) {
             println("BoardCytonSerialDirect: Packets: " + packetCount);
+        }
+
+        // Debug: print first few EEG values for first 3 packets
+        if (packetCount <= 3) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < NUM_EEG_CHANNELS; i++) {
+                sb.append(String.format("ch%d=%.1f ", i, parsedEegValues[i]));
+            }
+            println("Packet #" + packetCount + ": " + sb.toString());
         }
 
         double timestamp = System.currentTimeMillis() / 1000.0;
