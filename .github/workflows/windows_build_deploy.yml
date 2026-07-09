@@ -45,8 +45,17 @@ jobs:
     - name: Set Path
       run: |
         echo %GITHUB_WORKSPACE%\processing\processing-4.2>>%GITHUB_PATH%
-        echo C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64>>%GITHUB_PATH%
       shell: cmd
+    
+    - name: Locate mt.exe
+      run: |
+        $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter mt.exe | Sort-Object FullName -Descending | Select-Object -First 1
+        if (-not $mt) { throw "mt.exe not found under Windows Kits. Ensure Windows SDK is installed on the runner." }
+        $dir = Split-Path $mt.FullName
+        "Using mt.exe from $dir"
+        Add-Content $env:GITHUB_PATH $dir
+        & $mt.FullName -?
+      shell: pwsh
 
     - name: Print Path
       run: echo %PATH%
@@ -65,19 +74,23 @@ jobs:
       shell: cmd
 
     - name: Sign
+      if: ${{ github.event_name != 'pull_request' && secrets.AZURE_KEY_VAULT_URI != '' }}
       run: |
         dotnet tool install --global azuresigntool
-        mt -manifest %GITHUB_WORKSPACE%\release\windows\gui.manifest -outputresource:%GITHUB_WORKSPACE%\application.windows64\OpenBCI_GUI.exe;#1
-        mt -manifest %GITHUB_WORKSPACE%\release\windows\java.manifest -outputresource:%GITHUB_WORKSPACE%\application.windows64\java\bin\java.exe;#1
-        mt -manifest %GITHUB_WORKSPACE%\release\windows\javaw.manifest -outputresource:%GITHUB_WORKSPACE%\application.windows64\java\bin\javaw.exe;#1
-        azuresigntool sign --azure-key-vault-url "${{ secrets.AZURE_KEY_VAULT_URI }}" --azure-key-vault-client-id "${{ secrets.AZURE_CLIENT_ID }}" --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" --azure-key-vault-client-secret "${{ secrets.AZURE_CLIENT_SECRET }}" --azure-key-vault-certificate "${{ secrets.AZURE_CERT_NAME }}" --timestamp-rfc3161 http://timestamp.digicert.com --verbose %GITHUB_WORKSPACE%\application.windows64\OpenBCI_GUI.exe
-      shell: cmd
+        $env:PATH = "$env:PATH;$env:USERPROFILE\.dotnet\tools"
+        $workspace = $env:GITHUB_WORKSPACE
+        mt -manifest "$workspace\release\windows\gui.manifest" -outputresource:"$workspace\application.windows64\OpenBCI_GUI.exe;#1"
+        mt -manifest "$workspace\release\windows\java.manifest" -outputresource:"$workspace\application.windows64\java\bin\java.exe;#1"
+        mt -manifest "$workspace\release\windows\javaw.manifest" -outputresource:"$workspace\application.windows64\java\bin\javaw.exe;#1"
+        azuresigntool sign --azure-key-vault-url "${{ secrets.AZURE_KEY_VAULT_URI }}" --azure-key-vault-client-id "${{ secrets.AZURE_CLIENT_ID }}" --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" --azure-key-vault-client-secret "${{ secrets.AZURE_CLIENT_SECRET }}" --azure-key-vault-certificate "${{ secrets.AZURE_CERT_NAME }}" --timestamp-rfc3161 http://timestamp.digicert.com --verbose "$workspace\application.windows64\OpenBCI_GUI.exe"
+      shell: pwsh
   
     - name: Package
       run: python %GITHUB_WORKSPACE%\release\package.py
       shell: cmd
 
     - name: Configure AWS credentials
+      if: ${{ github.event_name != 'pull_request' && secrets.AWS_ROLE_TO_ASSUME != '' }}
       uses: aws-actions/configure-aws-credentials@v2
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -88,6 +101,7 @@ jobs:
       uses: tj-actions/branch-names@v7
 
     - name: Store Build on AWS
+      if: ${{ github.event_name != 'pull_request' && secrets.AWS_ROLE_TO_ASSUME != '' }}
       run: |
         cd ${{ github.workspace }}
         ls
