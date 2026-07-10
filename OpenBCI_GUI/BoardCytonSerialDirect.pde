@@ -117,17 +117,30 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     }
 
     private void configureSerialPort() throws Exception {
-        ProcessBuilder pb = new ProcessBuilder(
-            "stty", "-f", portName,
-            String.valueOf(BAUD_RATE),
-            "cs8", "-parenb", "-cstopb", "raw"
-        );
+        ProcessBuilder pb;
+        if (isWindows()) {
+            // Windows: use mode command to configure serial port
+            pb = new ProcessBuilder(
+                "mode", portName,
+                "baud=" + BAUD_RATE,
+                "parity=n",
+                "data=8",
+                "stop=1"
+            );
+        } else {
+            // Unix/macOS: use stty command
+            pb = new ProcessBuilder(
+                "stty", "-f", portName,
+                String.valueOf(BAUD_RATE),
+                "cs8", "-parenb", "-cstopb", "raw"
+            );
+        }
         pb.redirectErrorStream(true);
         Process p = pb.start();
         java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
         String line;
         while ((line = reader.readLine()) != null) {
-            println("BoardCytonSerialDirect: stty: " + line);
+            println("BoardCytonSerialDirect: configure: " + line);
         }
         p.waitFor();
     }
@@ -135,9 +148,14 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     @Override
     public boolean initializeInternal() {
         try {
-            println("BoardCytonSerialDirect: Opening " + portName + " at " + BAUD_RATE + " baud");
+            // On Windows, COM ports need \\.\COMx format for NIO access
+            String accessPortName = portName;
+            if (isWindows() && portName.toUpperCase().startsWith("COM")) {
+                accessPortName = "\\\\.\\" + portName;
+            }
+            println("BoardCytonSerialDirect: Opening " + accessPortName + " at " + BAUD_RATE + " baud");
 
-            serialFile = new java.io.RandomAccessFile(portName, "rw");
+            serialFile = new java.io.RandomAccessFile(accessPortName, "rw");
             serialChannel = serialFile.getChannel();
 
             configureSerialPort();
