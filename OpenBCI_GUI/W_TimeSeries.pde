@@ -213,13 +213,18 @@ class W_timeSeries extends Widget {
 
     // Update channel count dynamically when auto-detected
     void updateChannelCount() {
-        int newCount = currentBoard.getEXGChannels().length;
+        if (currentBoard == null) return;
+        int[] exgChannels = currentBoard.getEXGChannels();
+        if (exgChannels == null) return;
+        int newCount = exgChannels.length;
         if (newCount != numChannelBars && newCount > 0) {
             println("W_timeSeries: Updating channel count from " + numChannelBars + " to " + newCount);
             numChannelBars = newCount;
 
             // Recalculate layout
-            channelBarHeight = int(ts_h / numChannelBars);
+            if (ts_h > 0) {
+                channelBarHeight = int(ts_h / numChannelBars);
+            }
 
             // Recreate channel bars array
             channelBars = new ChannelBar[numChannelBars];

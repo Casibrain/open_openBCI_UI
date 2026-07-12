@@ -84,9 +84,9 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         return smoothData;
     }
 
-    // Get detected EEG channel count
+    // Get detected EEG channel count (default to 8 before auto-detection)
     public int getNumEegChannels() {
-        return numEegChannels;
+        return numEegChannels > 0 ? numEegChannels : 8;
     }
 
     // Ring buffer write (called by reader thread)
@@ -249,22 +249,24 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public int[] getEXGChannels() {
-        int[] channels = new int[numEegChannels];
-        for (int i = 0; i < numEegChannels; i++) channels[i] = i;
+        // Default to 8 channels before auto-detection
+        int count = numEegChannels > 0 ? numEegChannels : 8;
+        int[] channels = new int[count];
+        for (int i = 0; i < count; i++) channels[i] = i;
         return channels;
     }
 
     @Override
-    public int getTimestampChannel() { return numEegChannels + NUM_AUX_CHANNELS; }
+    public int getTimestampChannel() { return getNumEegChannels() + NUM_AUX_CHANNELS; }
 
     @Override
-    public int getSampleIndexChannel() { return numEegChannels + NUM_AUX_CHANNELS + 1; }
+    public int getSampleIndexChannel() { return getNumEegChannels() + NUM_AUX_CHANNELS + 1; }
 
     @Override
-    public int getMarkerChannel() { return numEegChannels + NUM_AUX_CHANNELS + 2; }
+    public int getMarkerChannel() { return getNumEegChannels() + NUM_AUX_CHANNELS + 2; }
 
     @Override
-    public int getTotalChannelCount() { return numEegChannels + NUM_AUX_CHANNELS + 3; }
+    public int getTotalChannelCount() { return getNumEegChannels() + NUM_AUX_CHANNELS + 3; }
 
     @Override
     protected double[][] getNewDataInternal() {
