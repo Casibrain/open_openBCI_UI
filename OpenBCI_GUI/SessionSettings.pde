@@ -1014,7 +1014,7 @@ class SessionSettings {
             filePath = "Error";
         }
         if (!filePath.equals("Error")) {
-            if (dataSource == DATASOURCE_CYTON) {
+            if (dataSource == DATASOURCE_CYTON || dataSource == DATASOURCE_CYTON_SERIAL) {
                 filePath += (_nchan == NCHAN_CYTON) ?
                     fileNames[0] :
                     fileNames[1];
