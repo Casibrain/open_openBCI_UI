@@ -369,7 +369,7 @@ class DataSourceBox {
     private MenuList sourceList;
 
     DataSourceBox(int _x, int _y, int _w, int _h, int _padding) {
-        numItems = 5;
+        numItems = 3;
         x = _x;
         y = _y;
         w = _w;
@@ -406,12 +406,12 @@ class DataSourceBox {
         sourceList.setPosition(_x, _y);
         // sourceList.itemHeight = 28;
         // sourceList.padding = 9;
-        sourceList.addItem("CYTON (live)", DATASOURCE_CYTON);
+        // sourceList.addItem("CYTON (live)", DATASOURCE_CYTON); // Hidden: not supported
         sourceList.addItem("CYTON (Serial)", DATASOURCE_CYTON_SERIAL);
-        sourceList.addItem("GANGLION (live)", DATASOURCE_GANGLION);
+        // sourceList.addItem("GANGLION (live)", DATASOURCE_GANGLION); // Hidden: not supported
         sourceList.addItem("PLAYBACK (from file)", DATASOURCE_PLAYBACKFILE);
         sourceList.addItem("SYNTHETIC (algorithmic)", DATASOURCE_SYNTHETIC);
-        sourceList.addItem("STREAMING (from external)", DATASOURCE_STREAMING);
+        // sourceList.addItem("STREAMING (from external)", DATASOURCE_STREAMING); // Hidden: not supported
         sourceList.scrollerLength = 10;
         sourceList.addCallback(new CallbackListener() {
             public void controlEvent(CallbackEvent theEvent) {
