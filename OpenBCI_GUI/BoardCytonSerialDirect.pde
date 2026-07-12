@@ -138,7 +138,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             serialPort.setNumDataBits(8);
             serialPort.setNumStopBits(com.fazecast.jSerialComm.SerialPort.ONE_STOP_BIT);
             serialPort.setParity(com.fazecast.jSerialComm.SerialPort.NO_PARITY);
-            serialPort.setComPortTimeouts(com.fazecast.jSerialComm.SerialPort.TIMEOUT_NON_BLOCKING, 0, 0);
+            // Set non-blocking timeout (0 = no timeout, read returns immediately)
+            serialPort.setComPortTimeouts(0, 0, 0);
 
             // Open the port
             if (!serialPort.openPort()) {
