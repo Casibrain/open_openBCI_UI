@@ -157,9 +157,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     @Override
     public boolean initializeInternal() {
         try {
-            // Configure serial port BEFORE opening with NIO to avoid "device unavailable" error
-            configureSerialPort();
-
             // On Windows, COM ports need \\.\COMx format for NIO access
             String accessPortName = portName;
             if (isWindows() && portName.toUpperCase().startsWith("COM")) {
@@ -170,9 +167,14 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             serialFile = new java.io.RandomAccessFile(accessPortName, "rw");
             serialChannel = serialFile.getChannel();
 
+            // Configure serial port AFTER opening with NIO on Windows
+            // The mode command may fail if port is already in use, but NIO handles the baud rate
+            configureSerialPort();
+
             // Flush pending data
             java.nio.ByteBuffer tmp = java.nio.ByteBuffer.allocate(4096);
-            serialChannel.read(tmp);
+            int flushed = serialChannel.read(tmp);
+            println("BoardCytonSerialDirect: Flushed " + flushed + " bytes on init");
 
             // Start dedicated reader thread
             readerRunning = true;
@@ -180,6 +182,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                 public void run() {
                     java.nio.ByteBuffer rbuf = java.nio.ByteBuffer.allocate(65536);
                     byte[] tmpData = new byte[65536];
+                    long totalBytesRead = 0;
+                    int readCount = 0;
                     while (readerRunning) {
                         try {
                             rbuf.clear();
@@ -188,6 +192,12 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                                 rbuf.flip();
                                 rbuf.get(tmpData, 0, n);
                                 ringWrite(tmpData, n);
+                                totalBytesRead += n;
+                                readCount++;
+                                // Debug: print first few reads and periodic status
+                                if (readCount <= 5 || readCount % 1000 == 0) {
+                                    println("BoardCytonSerialDirect: Read #" + readCount + ", " + n + " bytes, total: " + totalBytesRead);
+                                }
                             } else {
                                 Thread.sleep(1); // avoid busy spin
                             }
@@ -198,7 +208,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                             break;
                         }
                     }
-                    println("BoardCytonSerialDirect: Reader thread stopped");
+                    println("BoardCytonSerialDirect: Reader thread stopped. Total read: " + totalBytesRead + " bytes");
                 }
             }, "CytonSerialReader");
             readerThread.setDaemon(true);
@@ -237,6 +247,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         if (!streaming) return;
 
         // Drain ALL available data from ring buffer each frame
+        int available = ringAvailable();
+        if (available > 0) {
+            println("BoardCytonSerialDirect: updateInternal - " + available + " bytes available, packets: " + packetCount);
+        }
         while (ringAvailable() > 0) {
             int b = ringRead();
             if (b >= 0) {
