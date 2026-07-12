@@ -231,26 +231,17 @@ class ControlPanel {
                 }
             } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
                 // Direct USB serial layout:
-                // [dataSourceBox] [channelCountBox] [comPortBox]  <- all top-aligned
-                //                 [dataLogBoxCyton]                <-紧贴channelCountBox下方
-                //                 [bfStreamerBoxCyton]             <-紧贴SessionData
-                //                 [sdBox]                          <-紧贴BrainFlow Streamer
-                channelCountBox.x = dataSourceBox.x + dataSourceBox.w;
-                channelCountBox.y = dataSourceBox.y;
-                channelCountBox.draw();
-                comPortBox.x = channelCountBox.x + channelCountBox.w;
-                comPortBox.y = channelCountBox.y;
+                // [dataSourceBox] [comPortBox]  <- top-aligned with dataSourceBox
+                //                 [dataLogBoxCyton] <-紧贴interfaceBoxCyton下方
+                // Channel Count Box hidden: auto-detected from serial protocol
+                // BrainFlow Streamer and SD Card panels hidden: not needed for direct serial
+                comPortBox.x = dataSourceBox.x + dataSourceBox.w + dataSourceBox.w;
+                comPortBox.y = dataSourceBox.y;
                 comPortBox.draw();
                 comPortBox.serialList.setVisible(true);
-                dataLogBoxCyton.x = channelCountBox.x;
-                dataLogBoxCyton.y = channelCountBox.y + channelCountBox.h;
+                dataLogBoxCyton.x = dataSourceBox.x + dataSourceBox.w;
+                dataLogBoxCyton.y = interfaceBoxCyton.y + interfaceBoxCyton.h;
                 dataLogBoxCyton.draw();
-                bfStreamerBoxCyton.x = channelCountBox.x;
-                bfStreamerBoxCyton.y = dataLogBoxCyton.y + dataLogBoxCyton.h;
-                bfStreamerBoxCyton.draw();
-                sdBox.x = channelCountBox.x;
-                sdBox.y = bfStreamerBoxCyton.y + bfStreamerBoxCyton.h;
-                sdBox.draw();
             } else if (eegDataSource == DATASOURCE_PLAYBACKFILE) { //when data source is from playback file
                 recentPlaybackBox.draw();
                 playbackFileBox.draw();

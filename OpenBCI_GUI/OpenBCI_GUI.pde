@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //------------------------------------------------------------------------
 //Used to check GUI version in TopNav.pde and displayed on the splash screen on startup
 String localGUIVersionString = "v6.0.0-beta.1";
-String localGUIVersionDate = "2026/07/12 19:27:26";
+String localGUIVersionDate = "2026/07/12 19:51:51";
 
 PApplet ourApplet;
 
