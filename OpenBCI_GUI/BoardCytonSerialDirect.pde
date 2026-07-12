@@ -119,16 +119,25 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private void configureSerialPort() throws Exception {
         ProcessBuilder pb;
         if (isWindows()) {
-            // Windows: use mode command to configure serial port
+            // Windows: use mode command via cmd.exe to configure serial port
+            // The mode command is in System32 but not always in PATH for Java ProcessBuilder
             pb = new ProcessBuilder(
-                "mode", portName,
+                "cmd.exe", "/c", "mode",
+                portName,
                 "baud=" + BAUD_RATE,
                 "parity=n",
                 "data=8",
                 "stop=1"
             );
+        } else if (isLinux()) {
+            // Linux: use stty with -F flag (uppercase) for device file
+            pb = new ProcessBuilder(
+                "stty", "-F", portName,
+                String.valueOf(BAUD_RATE),
+                "cs8", "-parenb", "-cstopb", "raw"
+            );
         } else {
-            // Unix/macOS: use stty command
+            // macOS: use stty with -f flag (lowercase)
             pb = new ProcessBuilder(
                 "stty", "-f", portName,
                 String.valueOf(BAUD_RATE),
