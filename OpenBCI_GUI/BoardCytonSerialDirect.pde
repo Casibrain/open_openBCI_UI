@@ -157,6 +157,9 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     @Override
     public boolean initializeInternal() {
         try {
+            // Configure serial port BEFORE opening with NIO to avoid "device unavailable" error
+            configureSerialPort();
+
             // On Windows, COM ports need \\.\COMx format for NIO access
             String accessPortName = portName;
             if (isWindows() && portName.toUpperCase().startsWith("COM")) {
@@ -166,8 +169,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
             serialFile = new java.io.RandomAccessFile(accessPortName, "rw");
             serialChannel = serialFile.getChannel();
-
-            configureSerialPort();
 
             // Flush pending data
             java.nio.ByteBuffer tmp = java.nio.ByteBuffer.allocate(4096);

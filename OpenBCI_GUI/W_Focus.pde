@@ -328,7 +328,18 @@ class W_Focus extends Widget {
                 focusMetric.getMetric().get_code(),
                 focusClassifier.getClassifier().get_code()
                 );
-        mlModel = new MLModel (modelParams);
+        // Suppress harmless ARM DLL extraction warnings on x64 systems
+        java.io.PrintStream oldErr = System.err;
+        System.setErr(new java.io.PrintStream(new java.io.OutputStream() {
+            public void write(int b) { /* suppress */ }
+            public void write(byte[] b, int off, int len) { /* suppress */ }
+            public void flush() { /* suppress */ }
+        }));
+        try {
+            mlModel = new MLModel(modelParams);
+        } finally {
+            System.setErr(oldErr);
+        }
         try {
             mlModel.prepare();
         } catch (BrainFlowError e) {
