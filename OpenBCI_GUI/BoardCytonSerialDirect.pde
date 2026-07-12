@@ -152,27 +152,18 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
             // Flush pending data
             byte[] flushBuffer = new byte[4096];
-            int flushed = serialPort.readBytes(flushBuffer, flushBuffer.length);
-            println("BoardCytonSerialDirect: Flushed " + flushed + " bytes on init");
+            serialPort.readBytes(flushBuffer, flushBuffer.length);
 
             // Start dedicated reader thread
             readerRunning = true;
             readerThread = new Thread(new Runnable() {
                 public void run() {
                     byte[] readBuffer = new byte[65536];
-                    long totalBytesRead = 0;
-                    int readCount = 0;
                     while (readerRunning) {
                         try {
                             int n = serialPort.readBytes(readBuffer, readBuffer.length);
                             if (n > 0) {
                                 ringWrite(readBuffer, n);
-                                totalBytesRead += n;
-                                readCount++;
-                                // Debug: print first few reads and periodic status
-                                if (readCount <= 5 || readCount % 1000 == 0) {
-                                    println("BoardCytonSerialDirect: Read #" + readCount + ", " + n + " bytes, total: " + totalBytesRead);
-                                }
                             } else {
                                 Thread.sleep(1); // avoid busy spin
                             }
@@ -183,7 +174,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                             break;
                         }
                     }
-                    println("BoardCytonSerialDirect: Reader thread stopped. Total read: " + totalBytesRead + " bytes");
                 }
             }, "CytonSerialReader");
             readerThread.setDaemon(true);
