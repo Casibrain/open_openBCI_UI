@@ -395,7 +395,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         int detectedChannels = eegBytes / 3;
         if (detectedChannels < 1 || detectedChannels > 128) return; // Out of range
 
-        // Auto-detect channel count
+        // Auto-detect channel count (only once)
         if (!channelsDetected) {
             numEegChannels = detectedChannels;
             channelsDetected = true;
@@ -405,16 +405,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             updateToNChan(numEegChannels);
 
             // Reinitialize smoothing buffer with correct channel count
-            if (smoothData) {
-                buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
-            }
-        }
-
-        // Validate detected channel count matches current
-        if (detectedChannels != numEegChannels) {
-            // Channel count changed mid-stream, re-detect
-            numEegChannels = detectedChannels;
-            updateToNChan(numEegChannels);
             if (smoothData) {
                 buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
             }
