@@ -212,9 +212,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public void updateInternal() {
-        if (!streaming) return;
-
-        // Drain ALL available data from ring buffer each frame
+        // Always drain ring buffer to prevent overflow, regardless of streaming state
         while (ringAvailable() > 0) {
             int b = ringRead();
             if (b >= 0) {
@@ -226,7 +224,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     }
 
     @Override
-    public void startStreaming() { streaming = true; }
+    public void startStreaming() {
+        super.startStreaming();
+        streaming = true;
+    }
 
     @Override
     public void stopStreaming() { streaming = false; }
