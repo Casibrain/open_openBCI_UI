@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 // BoardCytonSerialDirect - Direct USB serial connection to Cyton
-// Uses Java NIO with a dedicated reader thread for high-throughput serial I/O
+// Uses jSerialComm for cross-platform serial communication
 // Parses OpenBCI binary packet format directly
 //
 ///////////////////////////////////////////////////////////////////////////////
@@ -12,9 +12,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         return BoardIds.CYTON_BOARD;
     }
 
-    // Serial I/O
-    private java.io.RandomAccessFile serialFile;
-    private java.nio.channels.FileChannel serialChannel;
+    // Serial I/O - using jSerialComm for cross-platform support
+    private com.fazecast.jSerialComm.SerialPort serialPort;
     private String portName;
     private final int BAUD_RATE = 921600;
 
@@ -116,82 +115,56 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         }
     }
 
+    // configureSerialPort is no longer needed - jSerialComm handles port configuration internally
     private void configureSerialPort() throws Exception {
-        ProcessBuilder pb;
-        if (isWindows()) {
-            // Windows: use mode command via cmd.exe to configure serial port
-            // The mode command is in System32 but not always in PATH for Java ProcessBuilder
-            pb = new ProcessBuilder(
-                "cmd.exe", "/c", "mode",
-                portName,
-                "baud=" + BAUD_RATE,
-                "parity=n",
-                "data=8",
-                "stop=1"
-            );
-        } else if (isLinux()) {
-            // Linux: use stty with -F flag (uppercase) for device file
-            pb = new ProcessBuilder(
-                "stty", "-F", portName,
-                String.valueOf(BAUD_RATE),
-                "cs8", "-parenb", "-cstopb", "raw"
-            );
-        } else {
-            // macOS: use stty with -f flag (lowercase)
-            pb = new ProcessBuilder(
-                "stty", "-f", portName,
-                String.valueOf(BAUD_RATE),
-                "cs8", "-parenb", "-cstopb", "raw"
-            );
-        }
-        pb.redirectErrorStream(true);
-        Process p = pb.start();
-        java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
-        String line;
-        while ((line = reader.readLine()) != null) {
-            println("BoardCytonSerialDirect: configure: " + line);
-        }
-        p.waitFor();
+        // jSerialComm sets baud rate, data bits, stop bits, parity via setBaudRate() etc.
+        // No external command needed
     }
 
     @Override
     public boolean initializeInternal() {
         try {
-            // On Windows, COM ports need \\.\COMx format for NIO access
-            String accessPortName = portName;
-            if (isWindows() && portName.toUpperCase().startsWith("COM")) {
-                accessPortName = "\\\\.\\" + portName;
+            println("BoardCytonSerialDirect: Opening " + portName + " at " + BAUD_RATE + " baud");
+
+            // Find and open the serial port using jSerialComm
+            serialPort = com.fazecast.jSerialComm.SerialPort.getCommPort(portName);
+            if (serialPort == null) {
+                println("BoardCytonSerialDirect: Port " + portName + " not found");
+                return false;
             }
-            println("BoardCytonSerialDirect: Opening " + accessPortName + " at " + BAUD_RATE + " baud");
 
-            serialFile = new java.io.RandomAccessFile(accessPortName, "rw");
-            serialChannel = serialFile.getChannel();
+            // Configure port parameters
+            serialPort.setBaudRate(BAUD_RATE);
+            serialPort.setNumDataBits(8);
+            serialPort.setNumStopBits(com.fazecast.jSerialComm.SerialPort.ONE_STOP_BIT);
+            serialPort.setParity(com.fazecast.jSerialComm.SerialPort.NO_PARITY);
+            serialPort.setComPortTimeouts(com.fazecast.jSerialComm.SerialPort.TIMEOUT_NON_BLOCKING, 0, 0);
 
-            // Configure serial port AFTER opening with NIO on Windows
-            // The mode command may fail if port is already in use, but NIO handles the baud rate
-            configureSerialPort();
+            // Open the port
+            if (!serialPort.openPort()) {
+                println("BoardCytonSerialDirect: Failed to open port " + portName);
+                return false;
+            }
+
+            println("BoardCytonSerialDirect: Port opened successfully");
 
             // Flush pending data
-            java.nio.ByteBuffer tmp = java.nio.ByteBuffer.allocate(4096);
-            int flushed = serialChannel.read(tmp);
+            byte[] flushBuffer = new byte[4096];
+            int flushed = serialPort.readBytes(flushBuffer, flushBuffer.length);
             println("BoardCytonSerialDirect: Flushed " + flushed + " bytes on init");
 
             // Start dedicated reader thread
             readerRunning = true;
             readerThread = new Thread(new Runnable() {
                 public void run() {
-                    java.nio.ByteBuffer rbuf = java.nio.ByteBuffer.allocate(65536);
-                    byte[] tmpData = new byte[65536];
+                    byte[] readBuffer = new byte[65536];
                     long totalBytesRead = 0;
                     int readCount = 0;
                     while (readerRunning) {
                         try {
-                            rbuf.clear();
-                            int n = serialChannel.read(rbuf);
+                            int n = serialPort.readBytes(readBuffer, readBuffer.length);
                             if (n > 0) {
-                                rbuf.flip();
-                                rbuf.get(tmpData, 0, n);
-                                ringWrite(tmpData, n);
+                                ringWrite(readBuffer, n);
                                 totalBytesRead += n;
                                 readCount++;
                                 // Debug: print first few reads and periodic status
@@ -233,13 +206,13 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             readerThread = null;
         }
         try {
-            if (serialChannel != null) serialChannel.close();
-            if (serialFile != null) serialFile.close();
+            if (serialPort != null && serialPort.isOpen()) {
+                serialPort.closePort();
+            }
         } catch (Exception e) {
             println("BoardCytonSerialDirect: Error closing: " + e.getMessage());
         }
-        serialChannel = null;
-        serialFile = null;
+        serialPort = null;
     }
 
     @Override
@@ -268,7 +241,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     public void stopStreaming() { streaming = false; }
 
     @Override
-    public boolean isConnected() { return serialChannel != null; }
+    public boolean isConnected() { return serialPort != null && serialPort.isOpen(); }
 
     @Override
     public boolean isStreaming() { return streaming; }
@@ -356,10 +329,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public Pair<Boolean, String> sendCommand(String command) {
-        if (serialChannel != null) {
+        if (serialPort != null && serialPort.isOpen()) {
             try {
-                java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(command.getBytes());
-                serialChannel.write(buf);
+                byte[] data = command.getBytes();
+                serialPort.writeBytes(data, data.length);
                 return new ImmutablePair<>(true, "");
             } catch (Exception e) {
                 println("BoardCytonSerialDirect: Send error: " + e.getMessage());
