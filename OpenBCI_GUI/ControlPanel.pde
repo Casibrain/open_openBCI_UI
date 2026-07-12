@@ -230,15 +230,12 @@ class ControlPanel {
                     dataLogBoxCyton.draw(); //Drawing here allows max file size dropdown to be drawn on top
                 }
             } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
-                // Direct USB serial layout:
-                // [dataSourceBox] [comPortBox] [dataLogBoxCyton] <- top-aligned
-                // Channel Count Box hidden: auto-detected from serial protocol
-                // BrainFlow Streamer and SD Card panels hidden: not needed for direct serial
-                comPortBox.x = dataSourceBox.x + dataSourceBox.w + dataSourceBox.w;
+                // Direct USB serial layout: all panels top-aligned horizontally
+                comPortBox.x = dataSourceBox.x + dataSourceBox.w;
                 comPortBox.y = dataSourceBox.y;
                 comPortBox.draw();
                 comPortBox.serialList.setVisible(true);
-                dataLogBoxCyton.x = comPortBox.x + comPortBox.w + dataSourceBox.w;
+                dataLogBoxCyton.x = comPortBox.x + comPortBox.w;
                 dataLogBoxCyton.y = dataSourceBox.y;
                 dataLogBoxCyton.draw();
             } else if (eegDataSource == DATASOURCE_PLAYBACKFILE) { //when data source is from playback file
