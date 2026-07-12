@@ -309,6 +309,8 @@ public DataSourcePlayback getDataSourcePlaybackClassFromFile(String path) {
     switch (underlyingBoardClassName) {
         case ("BoardCytonSerial"):
         case ("BoardCytonSerialDaisy"):
+        case ("BoardCytonSerialDirect"):
+        case ("BoardCytonSerialDirectDaisy"):
         case ("BoardCytonWifi"):
         case ("BoardCytonWifiDaisy"):
             return new DataSourcePlaybackCyton(path);
@@ -319,6 +321,8 @@ public DataSourcePlayback getDataSourcePlaybackClassFromFile(String path) {
         case ("BoardBrainFlowSynthetic"):
             return new DataSourcePlaybackSynthetic(path);
         default:
-            return null;
+            // Fallback: try to parse as generic ODF format
+            println("getDataSourcePlaybackClassFromFile: Unknown board class '" + underlyingBoardClassName + "', using default Cyton playback");
+            return new DataSourcePlaybackCyton(path);
     }
 }
