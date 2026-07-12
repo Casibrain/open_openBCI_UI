@@ -36,16 +36,13 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private final float scale_fac_uVolts_per_count = ADS1299_Vref / ((float)(pow(2, 23) - 1)) / ADS1299_gain * 1000000.0f;
     private final float scale_fac_accel_G_per_count = 0.002f / ((float)pow(2, 4));
 
-    // Packet parsing state
+    // Packet parsing state - buffer-based approach
     private final byte BYTE_START = (byte)0xA0;
     private final byte BYTE_END = (byte)0xC0;
-    private int PACKET_readstate = 0;
-    private int localByteCounter = 0;
-    private int localChannelCounter = 0;
-    private byte[] localAdsByteBuffer = {0, 0, 0};
-    private byte[] localAccelByteBuffer = {0, 0};
-    private int frameNumber = 0;
-    private int totalBytesInPacket = 0;
+    private final byte BYTE_END_ALT = (byte)0xC1;
+    private boolean packetInProgress = false;
+    private byte[] packetBuffer = new byte[64]; // Max packet size: 1+1+16*3+6+1 = 57
+    private int packetBufferLen = 0;
 
     // Parsed data - sized to maximum (16 channels)
     private double[] parsedEegValues = new double[16];
@@ -357,94 +354,82 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     }
 
     private void interpretBinaryStream(byte actbyte) {
-        switch (PACKET_readstate) {
-            case 0:
-                if (actbyte == BYTE_START) {
-                    PACKET_readstate++;
-                    totalBytesInPacket = 1;
-                }
-                break;
-            case 1:
-                frameNumber = actbyte & 0xFF;
-                localByteCounter = 0;
-                localChannelCounter = 0;
-                PACKET_readstate++;
-                totalBytesInPacket++;
-                break;
-            case 2:
-                // Read EEG data - 3 bytes per channel
-                localAdsByteBuffer[localByteCounter] = actbyte;
-                localByteCounter++;
-                totalBytesInPacket++;
-                if (localByteCounter == 3) {
-                    int rawValue = threeBytesToInt(localAdsByteBuffer[0], localAdsByteBuffer[1], localAdsByteBuffer[2]);
-                    parsedEegValues[localChannelCounter] = rawValue * scale_fac_uVolts_per_count;
-                    localChannelCounter++;
-                    if (localChannelCounter == numEegChannels) {
-                        PACKET_readstate++;
-                        localByteCounter = 0;
-                        localChannelCounter = 0;
-                    } else {
-                        localByteCounter = 0;
-                    }
-                }
-                break;
-            case 3:
-                // Read AUX data - 2 bytes per channel, 3 channels = 6 bytes
-                localAccelByteBuffer[localByteCounter] = actbyte;
-                localByteCounter++;
-                totalBytesInPacket++;
-                if (localByteCounter == 2) {
-                    short rawValue = twoBytesToShort(localAccelByteBuffer[0], localAccelByteBuffer[1]);
-                    parsedAuxValues[localChannelCounter] = rawValue * scale_fac_accel_G_per_count;
-                    localByteCounter = 0;
-                    localChannelCounter++;
-                    if (localChannelCounter == NUM_AUX_CHANNELS) {
-                        PACKET_readstate++;
-                        localByteCounter = 0;
-                        localChannelCounter = 0;
-                    }
-                }
-                break;
-            case 4:
-                // Wait for end byte
-                totalBytesInPacket++;
-                if (actbyte == BYTE_END || actbyte == (byte)0xC1) {
-                    processCompletePacket();
-                } else if (totalBytesInPacket > 60) {
-                    // Invalid packet, reset
-                    PACKET_readstate = 0;
-                }
-                break;
+        if (!packetInProgress) {
+            // Look for start byte
+            if (actbyte == BYTE_START) {
+                packetInProgress = true;
+                packetBufferLen = 0;
+                packetBuffer[packetBufferLen++] = actbyte;
+            }
+            return;
+        }
+
+        // Buffer bytes until end byte or overflow
+        if (packetBufferLen < packetBuffer.length) {
+            packetBuffer[packetBufferLen++] = actbyte;
+        }
+
+        // Check for end byte
+        if (actbyte == BYTE_END || actbyte == BYTE_END_ALT) {
+            processCompletePacket();
+        } else if (packetBufferLen >= packetBuffer.length) {
+            // Packet too large, discard
+            packetInProgress = false;
         }
     }
 
     private void processCompletePacket() {
-        PACKET_readstate = 0;
+        packetInProgress = false;
+        int totalLen = packetBufferLen;
 
-        // Auto-detect channel count from first complete packet
+        // Valid packet sizes: 8ch=33, 16ch=57
         // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
-        // So N = (totalBytesInPacket - 9) / 3
-        if (!channelsDetected && totalBytesInPacket > 9) {
-            int detectedChannels = (totalBytesInPacket - 9) / 3;
-            if (detectedChannels == 8 || detectedChannels == 16) {
-                numEegChannels = detectedChannels;
-                channelsDetected = true;
-                println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels");
+        if (totalLen < 10) return; // Too short
 
-                // Update global nchan and reinitialize UI
-                updateToNChan(numEegChannels);
+        int eegBytes = totalLen - 9; // Subtract start, counter, AUX(6), end
+        if (eegBytes <= 0 || eegBytes % 3 != 0) return; // Invalid size
 
-                // Reinitialize smoothing buffer with correct channel count
-                if (smoothData) {
-                    buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
-                }
+        int detectedChannels = eegBytes / 3;
+        if (detectedChannels != 8 && detectedChannels != 16) return; // Invalid channel count
+
+        // Auto-detect channel count
+        if (!channelsDetected) {
+            numEegChannels = detectedChannels;
+            channelsDetected = true;
+            println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels (" + totalLen + " bytes/packet)");
+
+            // Update global nchan and reinitialize UI
+            updateToNChan(numEegChannels);
+
+            // Reinitialize smoothing buffer with correct channel count
+            if (smoothData) {
+                buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
             }
         }
 
-        // Skip packets until channels are detected
-        if (!channelsDetected) {
-            return;
+        // Validate detected channel count matches current
+        if (detectedChannels != numEegChannels) {
+            // Channel count changed mid-stream, re-detect
+            numEegChannels = detectedChannels;
+            updateToNChan(numEegChannels);
+            if (smoothData) {
+                buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
+            }
+        }
+
+        // Parse EEG data: bytes 2..(2+N*3-1)
+        int offset = 2; // Skip start byte + frame number
+        for (int ch = 0; ch < numEegChannels; ch++) {
+            int rawValue = threeBytesToInt(packetBuffer[offset], packetBuffer[offset + 1], packetBuffer[offset + 2]);
+            parsedEegValues[ch] = rawValue * scale_fac_uVolts_per_count;
+            offset += 3;
+        }
+
+        // Parse AUX data: 3 channels × 2 bytes = 6 bytes
+        for (int ch = 0; ch < NUM_AUX_CHANNELS; ch++) {
+            short rawValue = twoBytesToShort(packetBuffer[offset], packetBuffer[offset + 1]);
+            parsedAuxValues[ch] = rawValue * scale_fac_accel_G_per_count;
+            offset += 2;
         }
 
         packetCount++;
