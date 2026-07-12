@@ -37,11 +37,14 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private final float scale_fac_accel_G_per_count = 0.002f / ((float)pow(2, 4));
 
     // Packet parsing state - buffer-based approach
+    // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
+    // Max 128 channels: 9 + 128*3 = 393 bytes; use 512 for safety margin
     private final byte BYTE_START = (byte)0xA0;
     private final byte BYTE_END = (byte)0xC0;
     private final byte BYTE_END_ALT = (byte)0xC1;
+    private static final int MAX_PACKET_SIZE = 512;
     private boolean packetInProgress = false;
-    private byte[] packetBuffer = new byte[64]; // Max packet size: 1+1+16*3+6+1 = 57
+    private byte[] packetBuffer = new byte[MAX_PACKET_SIZE];
     private int packetBufferLen = 0;
 
     // Parsed data - sized to maximum (16 channels)
@@ -365,14 +368,14 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         }
 
         // Buffer bytes until end byte or overflow
-        if (packetBufferLen < packetBuffer.length) {
+        if (packetBufferLen < MAX_PACKET_SIZE) {
             packetBuffer[packetBufferLen++] = actbyte;
         }
 
         // Check for end byte
         if (actbyte == BYTE_END || actbyte == BYTE_END_ALT) {
             processCompletePacket();
-        } else if (packetBufferLen >= packetBuffer.length) {
+        } else if (packetBufferLen >= MAX_PACKET_SIZE) {
             // Packet too large, discard
             packetInProgress = false;
         }
@@ -382,15 +385,15 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         packetInProgress = false;
         int totalLen = packetBufferLen;
 
-        // Valid packet sizes: 8ch=33, 16ch=57
         // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
-        if (totalLen < 10) return; // Too short
+        // Valid channel counts: 1-128 (power of 2 preferred: 1,2,4,8,16,32,64,128)
+        if (totalLen < 10) return; // Too short: minimum is 1+1+1*3+6+1 = 12
 
         int eegBytes = totalLen - 9; // Subtract start, counter, AUX(6), end
         if (eegBytes <= 0 || eegBytes % 3 != 0) return; // Invalid size
 
         int detectedChannels = eegBytes / 3;
-        if (detectedChannels != 8 && detectedChannels != 16) return; // Invalid channel count
+        if (detectedChannels < 1 || detectedChannels > 128) return; // Out of range
 
         // Auto-detect channel count
         if (!channelsDetected) {
