@@ -183,7 +183,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             readerThread.setDaemon(true);
             readerThread.start();
 
-            streaming = true;
             println("BoardCytonSerialDirect: Board initialized, reader thread started");
             return true;
         } catch (Exception e) {
