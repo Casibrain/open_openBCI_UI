@@ -5,7 +5,6 @@
 //
 //  Edited by Richard Waltman 9/24/18
 //  Refactored by Richard Waltman 11/9/2020
-//  Added feature to check GUI version using "latest version" tag on Github
 ///////////////////////////////////////////////////////////////////////////////////////
 
 import java.awt.Desktop;
@@ -28,16 +27,11 @@ class TopNav {
     public Button smoothingButton;
 
     public Button debugButton;
-    public Button tutorialsButton;
-    public Button shopButton;
-    public Button issuesButton;
-    public Button updateGuiVersionButton;
 
     public Button layoutButton;
     public Button settingsButton;
 
     public LayoutSelector layoutSelector;
-    public TutorialSelector tutorialSelector;
     public ConfigSelector configSelector;
     private int previousSystemMode = 0;
 
@@ -67,16 +61,11 @@ class TopNav {
 
         //TOP RIGHT OF GUI, FROM LEFT<---Right
         createDebugButton(" ", width - DEBUG_BUT_W - PAD_3, PAD_3, DEBUG_BUT_W, TOPNAV_BUT_H, h3, 16, TOPNAV_DARKBLUE, WHITE);
-        createTutorialsButton("Help", (int)debugButton.getPosition()[0] - TOPRIGHT_BUT_W - PAD_3, PAD_3, TOPRIGHT_BUT_W, TOPNAV_BUT_H, h3, 16, TOPNAV_DARKBLUE, WHITE);
-        createIssuesButton("Issues", (int)tutorialsButton.getPosition()[0] - TOPRIGHT_BUT_W - PAD_3, PAD_3, TOPRIGHT_BUT_W, TOPNAV_BUT_H, h3, 16, TOPNAV_DARKBLUE, WHITE);
-        createShopButton("Shop", (int)issuesButton.getPosition()[0] - TOPRIGHT_BUT_W - PAD_3, PAD_3, TOPRIGHT_BUT_W, TOPNAV_BUT_H, h3, 16, TOPNAV_DARKBLUE, WHITE);
-        createUpdateGuiButton("Update", (int)shopButton.getPosition()[0] - TOPRIGHT_BUT_W - PAD_3, PAD_3, TOPRIGHT_BUT_W, TOPNAV_BUT_H, h3, 16, TOPNAV_DARKBLUE, WHITE);
 
         //SUBNAV TOP RIGHT
         createTopNavSettingsButton("Settings", width - SUBNAV_BUT_W - PAD_3, SUBNAV_BUT_Y, SUBNAV_BUT_W, SUBNAV_BUT_H, h4, 14, SUBNAV_LIGHTBLUE, WHITE);
 
         layoutSelector = new LayoutSelector();
-        tutorialSelector = new TutorialSelector();
         configSelector = new ConfigSelector();
 
         //updateNavButtonsBasedOnColorScheme();
@@ -107,9 +96,6 @@ class TopNav {
     }
 
     void update() {
-        //ignore settings button when help dropdown is open
-        settingsButton.setLock(tutorialSelector.isVisible);
-
         //Make sure these buttons don't get accidentally locked
         if (systemMode >= SYSTEMMODE_POSTINIT) {
             setLockTopLeftSubNavCp5Objects(controlPanel.isOpen);
@@ -118,7 +104,6 @@ class TopNav {
         if (previousSystemMode != systemMode) {
             if (systemMode >= SYSTEMMODE_POSTINIT) {
                 layoutSelector.update();
-                tutorialSelector.update();
                 if (int(settingsButton.getPosition()[0]) != width - (SUBNAV_BUT_W*2) + 3) {
                     settingsButton.setPosition(width - (SUBNAV_BUT_W*2) + 3, SUBNAV_BUT_Y);
                     verbosePrint("TopNav: Updated Settings Button Position");
@@ -133,7 +118,7 @@ class TopNav {
             previousSystemMode = systemMode;
         }
         
-        boolean topNavSubClassIsOpen = layoutSelector.isVisible || configSelector.isVisible || tutorialSelector.isVisible;
+        boolean topNavSubClassIsOpen = layoutSelector.isVisible || configSelector.isVisible;
         setDropdownMenuIsOpen(topNavSubClassIsOpen);
     }
 
@@ -184,7 +169,6 @@ class TopNav {
 
         //Draw everything in these selector boxes above all topnav cp5 objects
         layoutSelector.draw();
-        tutorialSelector.draw();
         configSelector.draw();
 
         //Draw Console Log Image on top of cp5 object
@@ -197,10 +181,6 @@ class TopNav {
     void screenHasBeenResized(int _x, int _y) {
         topNav_cp5.setGraphics(ourApplet, 0, 0); //Important!
         debugButton.setPosition(width - debugButton.getWidth() - PAD_3, PAD_3);
-        tutorialsButton.setPosition((int)debugButton.getPosition()[0] - TOPRIGHT_BUT_W - PAD_3, PAD_3);
-        issuesButton.setPosition(tutorialsButton.getPosition()[0] - tutorialsButton.getWidth() - PAD_3, PAD_3);
-        shopButton.setPosition(issuesButton.getPosition()[0] - issuesButton.getWidth() - PAD_3, PAD_3);
-        updateGuiVersionButton.setPosition(shopButton.getPosition()[0] - shopButton.getWidth() - PAD_3, PAD_3);
         settingsButton.setPosition(width - settingsButton.getWidth() - PAD_3, SUBNAV_BUT_Y);
 
         if (systemMode == SYSTEMMODE_POSTINIT) {
@@ -213,98 +193,18 @@ class TopNav {
             layoutSelector.screenResized();
         }
         
-        tutorialSelector.screenResized();
         configSelector.screenResized();
     }
 
     void mousePressed() {
         layoutSelector.mousePressed();     //pass mousePressed along to layoutSelector
-        tutorialSelector.mousePressed();
         configSelector.mousePressed();
     }
 
     void mouseReleased() {
         layoutSelector.mouseReleased();    //pass mouseReleased along to layoutSelector
-        tutorialSelector.mouseReleased();
         configSelector.mouseReleased();
     } //end mouseReleased
-
-    //Load data from the latest release page using Github API and compare to local version
-    public Boolean guiVersionIsUpToDate() {
-        //Copy the local GUI version from OpenBCI_GUI.pde
-        float localVersion = getVersionAsFloat(localGUIVersionString);
-
-        boolean internetIsConnected = pingWebsite(guiLatestVersionGithubAPI);
-
-        if (internetIsConnected) {
-            println("TopNav: Internet Connection Successful");
-            //Get the latest release version from Github
-            String remoteVersionString = getGUIVersionFromInternet(guiLatestVersionGithubAPI);
-            float remoteVersion = getVersionAsFloat(remoteVersionString);   
-            
-            println("Local Version: " + localGUIVersionString + ", Latest Version: " + remoteVersionString);
-
-            if (localVersion < remoteVersion) {
-                println("GUI needs to be updated. Download at https://github.com/OpenBCI/OpenBCI_GUI/releases/latest");
-                updateGuiVersionButton.setDescription("GUI needs to be updated. -- Local: " + localGUIVersionString +  " GitHub: " + remoteVersionString);
-                return false;
-            } else {
-                println("GUI is up to date!");
-                updateGuiVersionButton.setDescription("GUI is up to date! -- Local: " + localGUIVersionString +  " GitHub: " + remoteVersionString);
-                return true;
-            }
-        } else {
-            println("TopNav: Internet Connection Not Available");
-            println("Local GUI Version: " + localGUIVersionString);
-            updateGuiVersionButton.setDescription("Connect to internet to check GUI version. -- Local: " + localGUIVersionString);
-            return null;
-        }
-    }
-
-    private String getGUIVersionFromInternet(String _url) {
-        String version = null;
-        try {
-            GetRequest get = new GetRequest(_url);
-            get.send(); // program will wait untill the request is completed
-            JSONObject response = parseJSONObject(get.getContent());
-            version = response.getString("name");
-        } catch (Exception e) {
-            outputError("Network Error: Unable to resolve host @ " + _url);
-        }
-        return version;
-    }
-
-    //Convert version string to float using each segment as a digit.
-    //Examples: 5.0.0-alpha.2 -> 500.12, 5.0.1-beta.9 -> 501.29, 5.0.1 -> 501.5
-    private float getVersionAsFloat(String s) {
-        float val = 0f;
-        
-        //Remove v
-        if (s.charAt(0) == 'v') {
-            String[] tempArr = split(s, 'v');
-            s = tempArr[1];
-        }
-        
-        //Check for minor version
-        if (s.length() > 5) {
-            String[] minorVersion = split(s, '-'); //separate the string at the dash between "5.0.0" and "alpha.2"
-            s = minorVersion[0];
-            String[] mv = split(minorVersion[1], '.');
-            if (mv[0].equals("alpha")) {
-                val += .1;
-            } else if (mv[0].equals("beta")) {
-                val += .2;
-            }
-            val += Integer.parseInt(mv[1]) * .01;
-        } else {
-            val += .5; //For stable version, add .5 so that it is greater than all alpha and beta versions
-        }
-
-        int[] webVersionCompareArray = int(split(s, '.'));
-        val = webVersionCompareArray[0]*100 + webVersionCompareArray[1]*10 + webVersionCompareArray[2] + val;
-        
-        return val;
-    }
 
     public void updateSmoothingButtonText() {
         smoothingButton.getCaptionLabel().setText(getSmoothingString());
@@ -376,10 +276,7 @@ class TopNav {
         layoutButton.onRelease(new CallbackListener() {
             public void controlEvent(CallbackEvent theEvent) {
                 //make sure that you can't open the layout selector accidentally
-                if (!tutorialSelector.isVisible) {
-                    //println("TopNav: Layout Dropdown Toggled");
-                    layoutSelector.toggleVisibility();
-                }
+                layoutSelector.toggleVisibility();
             }
         });
         layoutButton.setDescription("Here you can alter the overall layout of the GUI, allowing for different container configurations with more or less widgets.");
@@ -395,80 +292,11 @@ class TopNav {
         debugButton.setDescription("Click to open the Console Log window.");
     }
 
-    private void createTutorialsButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
-        tutorialsButton = createTNButton("tutorialsButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
-        tutorialsButton.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-               tutorialSelector.toggleVisibility();
-            }
-        });
-        tutorialsButton.setDescription("Click to find links to helpful online tutorials and getting started guides. Also, check out how to create custom widgets for the GUI!");
-    }
-
-    private void createIssuesButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
-        final String helpText = "If you have suggestions or want to share a bug you've found, please create an issue on the GUI's Github repo!";
-        issuesButton = createTNButton("issuesButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
-        issuesButton.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-               openURLInBrowser("https://github.com/OpenBCI/OpenBCI_GUI/issues");
-            }
-        });
-        issuesButton.setDescription("If you have suggestions or want to share a bug you've found, please create an issue on the GUI's Github repo!");
-    }
-
-    private void createShopButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
-        shopButton = createTNButton("shopButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
-        shopButton.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-               openURLInBrowser("https://shop.openbci.com/");
-            }
-        });
-        shopButton.setDescription("Head to our online store to purchase the latest OpenBCI hardware and accessories.");
-    }
-
-    private void createUpdateGuiButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
-        updateGuiVersionButton = createTNButton("updateGuiVersionButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
-        //Attempt to compare local and remote GUI versions when TopNav is instantiated
-        //This will also set the description/help-text for this cp5 button
-        //Do this check on app start and store as a global variable
-        guiIsUpToDate = guiVersionIsUpToDate();
-
-        updateGuiVersionButton.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                //Perform check again when button is pressed. User may have connected to internet by now!
-                guiIsUpToDate = guiVersionIsUpToDate();
-
-                if (guiIsUpToDate == null) {
-                    outputError("Update GUI: Unable to check for new version of GUI. Try again when connected to the internet.");
-                    return;
-                }
-
-                if (!guiIsUpToDate) {
-                    openURLInBrowser(guiLatestReleaseLocation);
-                    outputInfo("Update GUI: Opening latest GUI release page using default browser");
-                } else {
-                    outputSuccess("Update GUI: Local OpenBCI GUI is up-to-date!");
-                }
-            }
-        });
-
-        if (guiIsUpToDate == null) {
-            return;
-        }
-
-        if (!guiIsUpToDate) {
-            outputWarn("Update Available! Press the \"Update\" button at the top of the GUI to download the latest version.");
-        }
-    }
-
     private void createTopNavSettingsButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
         settingsButton = createTNButton("settingsButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
         settingsButton.onRelease(new CallbackListener() {
             public void controlEvent(CallbackEvent theEvent) {
-                //make Help button and Settings button mutually exclusive
-                if (!tutorialSelector.isVisible) {
-                    configSelector.toggleVisibility();
-                }
+                configSelector.toggleVisibility();
             }
         });
         settingsButton.setDescription("Save and Load GUI Settings! Click Default to revert to factory settings.");
@@ -946,206 +774,4 @@ class ConfigSelector {
             expertMode.setColorBackground(BUTTON_NOOBGREEN);
         }
     } 
-}
-
-class TutorialSelector {
-
-    private int x, y, w, h, margin, b_w, b_h;
-    public boolean isVisible;
-    private ControlP5 tutorial_cp5;
-    private Button gettingStarted;
-    private Button testingImpedance;
-    private Button troubleshootingGuide;
-    private Button customWidgets;
-    private Button openbciForum;
-    private Button ftdiBufferFix;
-    private final int NUM_TUTORIAL_BUTTONS = 6;
-
-    TutorialSelector() {
-        w = 180;
-        //account for consoleLog button, help button, and spacing
-        x = width - 33 - w - 3*2;
-        y = (navBarHeight) - 3;
-        margin = 6;
-        b_w = w - margin*2;
-        b_h = 22;
-        h = margin*(NUM_TUTORIAL_BUTTONS+1) + b_h*NUM_TUTORIAL_BUTTONS;
-
-        //Instantiate local cp5 for this box
-        tutorial_cp5 = new ControlP5(ourApplet);
-        tutorial_cp5.setGraphics(ourApplet, 0,0);
-        tutorial_cp5.setAutoDraw(false);
-
-        isVisible = false;
-
-        int buttonNumber = 0;
-        createGettingStartedButton("gettingStarted", "Getting Started", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-        buttonNumber++;
-        createTestingImpedanceButton("testingImpedance", "Testing Impedance", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-        buttonNumber++;
-        createFtdiBufferFixButton("ftdiBufferFix", "Cyton Driver Fix", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-        buttonNumber++;
-        createTroubleshootingGuideButton("troubleshootingGuide", "Troubleshooting Guide", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-        buttonNumber++;
-        createCustomWidgetsButton("customWidgets", "Building Custom Widgets", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-        buttonNumber++;
-        createOpenbciForumButton("openbciForum", "OpenBCI Forum", x + margin, y + margin*(buttonNumber+1) + b_h*(buttonNumber), b_w, b_h);
-    }
-
-    void update() {
-        if (isVisible) { //only update if visible
-            // //close dropdown when mouse leaves
-            // if ((mouseX < x || mouseX > x + w || mouseY < y || mouseY > y + h) && !topNav.tutorialsButton.isMouseHere()){
-            //   toggleVisibility();
-            // }
-        }
-    }
-
-    void draw() {
-        if (isVisible) { //only draw if visible
-            pushStyle();
-
-            stroke(OPENBCI_DARKBLUE);
-            // fill(229); //bg
-            fill(OPENBCI_BLUE); //bg
-            rect(x, y, w, h);
-
-
-            // fill(177, 184, 193);
-            noStroke();
-            //Draw a tiny rectangle to make it look like the box and button are connected
-            rect(x+w-(topNav.tutorialsButton.getWidth()-1), y, (topNav.tutorialsButton.getWidth()-1), 1);
-
-            popStyle();
-
-            tutorial_cp5.draw();
-        }
-    }
-
-    void isMouseHere() {
-    }
-
-    void mousePressed() {
-    }
-
-    void mouseReleased() {
-        //only allow button interactivity if isVisible==true
-        if (isVisible) {
-            if ((mouseX < x || mouseX > x + w || mouseY < y || mouseY > y + h) && !topNav.tutorialsButton.isInside()) {
-                toggleVisibility();
-                //topNav.configButton.setIgnoreHover(false);
-            }
-        }
-    }
-
-    void screenResized() {
-
-        tutorial_cp5.setGraphics(ourApplet, 0,0);
-
-        //update position of outer box and buttons. Y values do not change for this box.
-        int oldX = x;
-        x = width - 33 - w - 3*2;
-        int dx = oldX - x;
-
-        for (int j = 0; j < tutorial_cp5.getAll().size(); j++) {
-            Button c = (Button) tutorial_cp5.getController(tutorial_cp5.getAll().get(j).getAddress());
-            c.setPosition(c.getPosition()[0] - dx, c.getPosition()[1]);
-        }
-        
-    }
-
-    void toggleVisibility() {
-        isVisible = !isVisible;
-        if (systemMode >= SYSTEMMODE_POSTINIT) {
-            if (isVisible) {
-                //the very convoluted way of locking all controllers of a single controlP5 instance...
-                for (int i = 0; i < wm.widgets.size(); i++) {
-                    for (int j = 0; j < wm.widgets.get(i).cp5_widget.getAll().size(); j++) {
-                        wm.widgets.get(i).cp5_widget.getController(wm.widgets.get(i).cp5_widget.getAll().get(j).getAddress()).lock();
-                    }
-                }
-            } else {
-                //the very convoluted way of unlocking all controllers of a single controlP5 instance...
-                for (int i = 0; i < wm.widgets.size(); i++) {
-                    for (int j = 0; j < wm.widgets.get(i).cp5_widget.getAll().size(); j++) {
-                        wm.widgets.get(i).cp5_widget.getController(wm.widgets.get(i).cp5_widget.getAll().get(j).getAddress()).unlock();
-                    }
-                }
-            }
-        }
-    }
-
-    private void createGettingStartedButton(String name, String text, int _x, int _y, int _w, int _h) {
-        gettingStarted = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        gettingStarted.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                openURLInBrowser("https://docs.openbci.com/GettingStarted/GettingStartedLanding/");
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        gettingStarted.setDescription("Need help getting started? Click here to view the official OpenBCI Getting Started guides.");
-    }
-
-    private void createTestingImpedanceButton(String name, String text, int _x, int _y, int _w, int _h) {
-        testingImpedance = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        testingImpedance.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                openURLInBrowser("https://docs.openbci.com/Software/OpenBCISoftware/GUIDocs/#impedance-testing");
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        testingImpedance.setDescription("Click here to learn more about testing the impedance on electrodes using the OpenBCI GUI. This process is different for Cyton and Ganglion. Checking impedance only works with passive electrodes.");
-    }
-
-    private void createTroubleshootingGuideButton(String name, String text, int _x, int _y, int _w, int _h) {
-        troubleshootingGuide = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        troubleshootingGuide.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                openURLInBrowser("https://docs.openbci.com/Troubleshooting/GUI_Troubleshooting/");
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        troubleshootingGuide.setDescription("Having trouble? Start here with some general troubleshooting tips found on the OpenBCI Docs.");
-    }
-
-    private void createCustomWidgetsButton(String name, String text, int _x, int _y, int _w, int _h) {
-        customWidgets = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        customWidgets.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                openURLInBrowser("https://docs.openbci.com/Software/OpenBCISoftware/GUIWidgets/#custom-widget");
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        customWidgets.setDescription("Click here to learn about creating your own custom OpenBCI widgets!");
-    }
-
-    private void createOpenbciForumButton(String name, String text, int _x, int _y, int _w, int _h) {
-        openbciForum = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        openbciForum.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                openURLInBrowser("https://openbci.com/forum/");
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        openbciForum.setDescription("Click here to visit the official OpenBCI Forum.");
-    }
-
-    private void createFtdiBufferFixButton(String name, String text, int _x, int _y, int _w, int _h) {
-        openbciForum = createButton(tutorial_cp5, name, text, _x, _y, _w, _h);
-        openbciForum.onRelease(new CallbackListener() {
-            public void controlEvent(CallbackEvent theEvent) {
-                String ftdiDriverDocUrl;
-                if (isMac()) {
-                    ftdiDriverDocUrl = "https://docs.openbci.com/Troubleshooting/FTDI_Fix_Mac/";
-                } else if (isLinux()){
-                    ftdiDriverDocUrl = "https://docs.openbci.com/Troubleshooting/FTDI_Fix_Linux/";
-                } else {
-                    ftdiDriverDocUrl = "https://docs.openbci.com/Troubleshooting/FTDI_Fix_Windows/";
-                }
-                openURLInBrowser(ftdiDriverDocUrl);
-                toggleVisibility(); //shut layoutSelector if something is selected
-            }
-        });
-        openbciForum.setDescription("Click here to view information on how to lower the Cyton Dongle latency for your current operating system.");
-    }
 }
