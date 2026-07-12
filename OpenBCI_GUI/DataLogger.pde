@@ -39,20 +39,32 @@ class DataLogger {
         }
 
         double[][] newData = currentBoard.getFrameData();
+        if (newData == null || newData.length == 0 || newData[0].length == 0) {
+            return;
+        }
 
-        switch (outputDataSource) {
-            case OUTPUT_SOURCE_ODF:
-                fileWriterODF.append(newData);
-                if (currentBoard instanceof AuxDataBoard)
-                    fileWriterAuxODF.append(((AuxDataBoard)currentBoard).getAuxFrameData());
-                break;
-            case OUTPUT_SOURCE_BDF:
-                fileWriterBDF.writeRawData_dataPacket(newData);
-                break;
-            case OUTPUT_SOURCE_NONE:
-            default:
-                // Do nothing...
-                break;
+        try {
+            switch (outputDataSource) {
+                case OUTPUT_SOURCE_ODF:
+                    if (fileWriterODF != null) {
+                        fileWriterODF.append(newData);
+                    }
+                    if (currentBoard instanceof AuxDataBoard && fileWriterAuxODF != null) {
+                        fileWriterAuxODF.append(((AuxDataBoard)currentBoard).getAuxFrameData());
+                    }
+                    break;
+                case OUTPUT_SOURCE_BDF:
+                    if (fileWriterBDF != null) {
+                        fileWriterBDF.writeRawData_dataPacket(newData);
+                    }
+                    break;
+                case OUTPUT_SOURCE_NONE:
+                default:
+                    // Do nothing...
+                    break;
+            }
+        } catch (Exception e) {
+            println("DataLogger: Error writing data: " + e.getMessage());
         }
     }
 
