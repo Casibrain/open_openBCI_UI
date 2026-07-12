@@ -211,6 +211,30 @@ class W_timeSeries extends Widget {
         }
     }
 
+    // Update channel count dynamically when auto-detected
+    void updateChannelCount() {
+        int newCount = currentBoard.getEXGChannels().length;
+        if (newCount != numChannelBars && newCount > 0) {
+            println("W_timeSeries: Updating channel count from " + numChannelBars + " to " + newCount);
+            numChannelBars = newCount;
+
+            // Recalculate layout
+            channelBarHeight = int(ts_h / numChannelBars);
+
+            // Recreate channel bars array
+            channelBars = new ChannelBar[numChannelBars];
+            for (int i = 0; i < numChannelBars; i++) {
+                int channelBarY = int(ts_y) + i * channelBarHeight;
+                ChannelBar tempBar = new ChannelBar(pApplet, i, int(ts_x), channelBarY, int(ts_w), channelBarHeight, expand_default, expand_hover, expand_active, contract_default, contract_hover, contract_active);
+                channelBars[i] = tempBar;
+            }
+
+            // Update channel select
+            tsChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "TS_Channels");
+            tsChanSelect.activateAllButtons();
+        }
+    }
+
     void update() {
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
 

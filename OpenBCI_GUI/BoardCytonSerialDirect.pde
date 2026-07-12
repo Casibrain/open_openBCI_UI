@@ -429,6 +429,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                 numEegChannels = detectedChannels;
                 channelsDetected = true;
                 println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels");
+
+                // Update global nchan and reinitialize UI
+                updateToNChan(numEegChannels);
+
                 // Reinitialize smoothing buffer with correct channel count
                 if (smoothData) {
                     buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);

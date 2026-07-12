@@ -1002,10 +1002,16 @@ void systemInitSession() {
 
 //Global function to update the number of channels
 void updateToNChan(int _nchan) {
+    if (_nchan == nchan) return; // No change needed
     nchan = _nchan;
     settings.slnchan = _nchan; //used in SoftwareSettings.pde only
     fftBuff = new ddf.minim.analysis.FFT[nchan];  //reinitialize the FFT buffer
     println("OpenBCI_GUI: Channel count set to " + str(nchan));
+
+    // Update TimeSeries widget if initialized
+    if (w_timeSeries != null) {
+        w_timeSeries.updateChannelCount();
+    }
 }
 
 void introAnimation() {
