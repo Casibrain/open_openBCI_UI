@@ -36,14 +36,18 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private final float scale_fac_uVolts_per_count = ADS1299_Vref / ((float)(pow(2, 23) - 1)) / ADS1299_gain * 1000000.0f;
     private final float scale_fac_accel_G_per_count = 0.002f / ((float)pow(2, 4));
 
-    // Packet parsing state - buffer-based approach
+    // Packet parsing state - state machine with byte counting
     // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
-    // Max 128 channels: 9 + 128*3 = 393 bytes; use 512 for safety margin
+    // Valid sizes: 8ch=33, 16ch=57
     private final byte BYTE_START = (byte)0xA0;
     private final byte BYTE_END = (byte)0xC0;
-    private final byte BYTE_END_ALT = (byte)0xC1;
     private static final int MAX_PACKET_SIZE = 512;
-    private boolean packetInProgress = false;
+    private static final int PACKET_HEADER = 2; // start byte + frame number
+    private static final int PACKET_FOOTER = 1; // end byte
+    private static final int PACKET_AUX_SIZE = 6; // 3 channels × 2 bytes
+    private int packetState = 0; // 0=waiting for start, 1=reading body, 2=done
+    private int packetPosition = 0; // bytes read in current packet (including start)
+    private int expectedPacketSize = 0; // 0 = not yet detected
     private byte[] packetBuffer = new byte[MAX_PACKET_SIZE];
     private int packetBufferLen = 0;
 
@@ -347,58 +351,75 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     }
 
     private void interpretBinaryStream(byte actbyte) {
-        if (!packetInProgress) {
-            // Look for start byte
-            if (actbyte == BYTE_START) {
-                packetInProgress = true;
-                packetBufferLen = 0;
-                packetBuffer[packetBufferLen++] = actbyte;
-            }
-            return;
-        }
+        switch (packetState) {
+            case 0: // Waiting for start byte
+                if (actbyte == BYTE_START) {
+                    packetBufferLen = 0;
+                    packetBuffer[packetBufferLen++] = actbyte;
+                    packetPosition = 1;
+                    packetState = 1;
+                }
+                break;
 
-        // Buffer bytes until end byte or overflow
-        if (packetBufferLen < MAX_PACKET_SIZE) {
-            packetBuffer[packetBufferLen++] = actbyte;
-        }
+            case 1: // Reading packet body
+                if (packetBufferLen < MAX_PACKET_SIZE) {
+                    packetBuffer[packetBufferLen++] = actbyte;
+                }
+                packetPosition++;
 
-        // Check for end byte
-        if (actbyte == BYTE_END || actbyte == BYTE_END_ALT) {
-            processCompletePacket();
-        } else if (packetBufferLen >= MAX_PACKET_SIZE) {
-            // Packet too large, discard
-            packetInProgress = false;
+                if (expectedPacketSize > 0) {
+                    // We know the expected size — only accept end byte at exact position
+                    if (packetPosition == expectedPacketSize) {
+                        if (actbyte == BYTE_END) {
+                            processCompletePacket();
+                        } else {
+                            // Wrong end byte at expected position — desync, reset
+                            packetState = 0;
+                        }
+                    } else if (packetPosition > expectedPacketSize) {
+                        // Overshot — desync
+                        packetState = 0;
+                    }
+                    // Before expectedPacketSize, just keep reading (ignore any 0xC0 in data)
+                } else {
+                    // Channel count not yet detected — try to detect from packet size
+                    if (actbyte == BYTE_END && packetPosition >= 10) {
+                        // Found end byte, check if packet size is valid
+                        int eegBytes = packetPosition - 9;
+                        if (eegBytes > 0 && eegBytes % 3 == 0) {
+                            int channels = eegBytes / 3;
+                            if (channels >= 1 && channels <= 128) {
+                                // Valid packet — lock in the channel count
+                                expectedPacketSize = packetPosition;
+                                numEegChannels = channels;
+                                channelsDetected = true;
+                                println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels (" + expectedPacketSize + " bytes/packet)");
+                                updateToNChan(numEegChannels);
+                                if (smoothData) {
+                                    buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
+                                }
+                                processCompletePacket();
+                            } else {
+                                packetState = 0;
+                            }
+                        } else {
+                            packetState = 0;
+                        }
+                    } else if (packetPosition >= MAX_PACKET_SIZE) {
+                        // Too long without end byte — discard
+                        packetState = 0;
+                    }
+                }
+                break;
         }
     }
 
     private void processCompletePacket() {
-        packetInProgress = false;
-        int totalLen = packetBufferLen;
+        packetState = 0;
 
-        // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
-        // Valid channel counts: 1-128 (power of 2 preferred: 1,2,4,8,16,32,64,128)
-        if (totalLen < 10) return; // Too short: minimum is 1+1+1*3+6+1 = 12
-
-        int eegBytes = totalLen - 9; // Subtract start, counter, AUX(6), end
-        if (eegBytes <= 0 || eegBytes % 3 != 0) return; // Invalid size
-
-        int detectedChannels = eegBytes / 3;
-        if (detectedChannels < 1 || detectedChannels > 128) return; // Out of range
-
-        // Auto-detect channel count (only once)
-        if (!channelsDetected) {
-            numEegChannels = detectedChannels;
-            channelsDetected = true;
-            println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels (" + totalLen + " bytes/packet)");
-
-            // Update global nchan and reinitialize UI
-            updateToNChan(numEegChannels);
-
-            // Reinitialize smoothing buffer with correct channel count
-            if (smoothData) {
-                buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
-            }
-        }
+        // Validate packet: start byte + counter + N*3 EEG + 6 AUX + end = expectedPacketSize
+        if (packetBufferLen != expectedPacketSize) return;
+        if (packetBuffer[0] != BYTE_START) return;
 
         // Parse EEG data: bytes 2..(2+N*3-1)
         int offset = 2; // Skip start byte + frame number
@@ -422,7 +443,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             println("BoardCytonSerialDirect: Packets: " + packetCount);
         }
 
-        // Debug: print first few EEG values
         if (packetCount <= 3) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < numEegChannels; i++) {
