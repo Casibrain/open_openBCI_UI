@@ -594,12 +594,8 @@ void initSystem() {
             }
             break;
         case DATASOURCE_CYTON_SERIAL:
-            if(nchan == 16) {
-                currentBoard = new BoardCytonSerialDirectDaisy(openBCI_portName);
-            }
-            else {
-                currentBoard = new BoardCytonSerialDirect(openBCI_portName);
-            }
+            // Channel count (8 or 16) is auto-detected from packet structure
+            currentBoard = new BoardCytonSerialDirect(openBCI_portName);
             println("OpenBCI_GUI: Init session using Cyton Direct Serial at 921600 baud");
             break;
         case DATASOURCE_SYNTHETIC:

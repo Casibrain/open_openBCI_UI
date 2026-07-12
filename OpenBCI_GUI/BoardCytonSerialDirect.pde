@@ -3,6 +3,7 @@
 // BoardCytonSerialDirect - Direct USB serial connection to Cyton
 // Uses jSerialComm for cross-platform serial communication
 // Parses OpenBCI binary packet format directly
+// Auto-detects channel count (8 or 16) from packet structure
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -25,8 +26,9 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private int ringTail = 0; // read position
     private final Object ringLock = new Object();
 
-    // Channel config
-    private final int NUM_EEG_CHANNELS = 8;
+    // Channel config - dynamic, auto-detected from packet structure
+    private int numEegChannels = 0; // Will be detected from first complete packet
+    private boolean channelsDetected = false;
     private final int NUM_AUX_CHANNELS = 3;
     private final float SAMPLE_RATE = 250.0f;
     private final float ADS1299_Vref = 4.5f;
@@ -45,8 +47,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private int frameNumber = 0;
     private int totalBytesInPacket = 0;
 
-    // Parsed data
-    private double[] parsedEegValues = new double[NUM_EEG_CHANNELS];
+    // Parsed data - sized to maximum (16 channels)
+    private double[] parsedEegValues = new double[16];
     private double[] parsedAuxValues = new double[NUM_AUX_CHANNELS];
 
     // Data buffers - use a queue to hold all parsed packets between frames
@@ -71,7 +73,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     public synchronized void setSmoothingActive(boolean active) {
         if (smoothData == active) return;
         if (active) {
-            buffer = new Buffer<double[]>((int)SAMPLE_RATE);
+            buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
         } else {
             buffer = null;
         }
@@ -80,6 +82,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     public boolean getSmoothingActive() {
         return smoothData;
+    }
+
+    // Get detected EEG channel count
+    public int getNumEegChannels() {
+        return numEegChannels;
     }
 
     // Ring buffer write (called by reader thread)
@@ -113,12 +120,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             if (avail < 0) avail += ringBuffer.length;
             return avail;
         }
-    }
-
-    // configureSerialPort is no longer needed - jSerialComm handles port configuration internally
-    private void configureSerialPort() throws Exception {
-        // jSerialComm sets baud rate, data bits, stop bits, parity via setBaudRate() etc.
-        // No external command needed
     }
 
     @Override
@@ -221,10 +222,6 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         if (!streaming) return;
 
         // Drain ALL available data from ring buffer each frame
-        int available = ringAvailable();
-        if (available > 0) {
-            println("BoardCytonSerialDirect: updateInternal - " + available + " bytes available, packets: " + packetCount);
-        }
         while (ringAvailable() > 0) {
             int b = ringRead();
             if (b >= 0) {
@@ -252,24 +249,22 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public int[] getEXGChannels() {
-        // Return 0-based indices to match our data array layout
-        // processNewData() uses exgChannels[Ichan] to index into the data array
-        int[] channels = new int[NUM_EEG_CHANNELS];
-        for (int i = 0; i < NUM_EEG_CHANNELS; i++) channels[i] = i;
+        int[] channels = new int[numEegChannels];
+        for (int i = 0; i < numEegChannels; i++) channels[i] = i;
         return channels;
     }
 
     @Override
-    public int getTimestampChannel() { return NUM_EEG_CHANNELS + NUM_AUX_CHANNELS; }
+    public int getTimestampChannel() { return numEegChannels + NUM_AUX_CHANNELS; }
 
     @Override
-    public int getSampleIndexChannel() { return NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 1; }
+    public int getSampleIndexChannel() { return numEegChannels + NUM_AUX_CHANNELS + 1; }
 
     @Override
-    public int getMarkerChannel() { return NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 2; }
+    public int getMarkerChannel() { return numEegChannels + NUM_AUX_CHANNELS + 2; }
 
     @Override
-    public int getTotalChannelCount() { return NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 3; }
+    public int getTotalChannelCount() { return numEegChannels + NUM_AUX_CHANNELS + 3; }
 
     @Override
     protected double[][] getNewDataInternal() {
@@ -280,10 +275,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             numSamples = pendingDataQueue.size();
             if (numSamples == 0) return emptyData;
 
-            result = new double[getTotalChannelCount()][numSamples];
+            int totalChannels = getTotalChannelCount();
+            result = new double[totalChannels][numSamples];
             for (int i = 0; i < numSamples; i++) {
                 double[] sample = pendingDataQueue.get(i);
-                for (int j = 0; j < getTotalChannelCount(); j++) {
+                for (int j = 0; j < totalChannels; j++) {
                     result[j][i] = sample[j];
                 }
             }
@@ -293,9 +289,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         if (!smoothData) return result;
 
         // Apply smoothing
+        int totalChannels = getTotalChannelCount();
         for (int i = 0; i < result[0].length; i++) {
-            double[] newEntry = new double[getTotalChannelCount()];
-            for (int j = 0; j < getTotalChannelCount(); j++) {
+            double[] newEntry = new double[totalChannels];
+            for (int j = 0; j < totalChannels; j++) {
                 newEntry[j] = result[j][i];
             }
             buffer.addNewEntry(newEntry);
@@ -304,10 +301,10 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         int numData = buffer.getDataCount();
         if (numData == 0) return emptyData;
 
-        double[][] res = new double[getTotalChannelCount()][numData];
+        double[][] res = new double[totalChannels][numData];
         for (int i = 0; i < numData; i++) {
             double[] curData = buffer.popFirstEntry();
-            for (int j = 0; j < getTotalChannelCount(); j++) {
+            for (int j = 0; j < totalChannels; j++) {
                 res[j][i] = curData[j];
             }
         }
@@ -316,11 +313,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     protected void addChannelNamesInternal(String[] channelNames) {
-        for (int i = 0; i < NUM_EEG_CHANNELS; i++) channelNames[i] = "EEG_" + (i + 1);
-        for (int i = 0; i < NUM_AUX_CHANNELS; i++) channelNames[NUM_EEG_CHANNELS + i] = "Aux_" + (i + 1);
-        channelNames[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS] = "Timestamp";
-        channelNames[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 1] = "SampleIndex";
-        channelNames[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 2] = "Marker";
+        for (int i = 0; i < numEegChannels; i++) channelNames[i] = "EEG_" + (i + 1);
+        for (int i = 0; i < NUM_AUX_CHANNELS; i++) channelNames[numEegChannels + i] = "Aux_" + (i + 1);
+        channelNames[numEegChannels + NUM_AUX_CHANNELS] = "Timestamp";
+        channelNames[numEegChannels + NUM_AUX_CHANNELS + 1] = "SampleIndex";
+        channelNames[numEegChannels + NUM_AUX_CHANNELS + 2] = "Marker";
     }
 
     @Override
@@ -373,6 +370,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                 totalBytesInPacket++;
                 break;
             case 2:
+                // Read EEG data - 3 bytes per channel
                 localAdsByteBuffer[localByteCounter] = actbyte;
                 localByteCounter++;
                 totalBytesInPacket++;
@@ -380,7 +378,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                     int rawValue = threeBytesToInt(localAdsByteBuffer[0], localAdsByteBuffer[1], localAdsByteBuffer[2]);
                     parsedEegValues[localChannelCounter] = rawValue * scale_fac_uVolts_per_count;
                     localChannelCounter++;
-                    if (localChannelCounter == NUM_EEG_CHANNELS) {
+                    if (localChannelCounter == numEegChannels) {
                         PACKET_readstate++;
                         localByteCounter = 0;
                         localChannelCounter = 0;
@@ -390,6 +388,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                 }
                 break;
             case 3:
+                // Read AUX data - 2 bytes per channel, 3 channels = 6 bytes
                 localAccelByteBuffer[localByteCounter] = actbyte;
                 localByteCounter++;
                 totalBytesInPacket++;
@@ -406,10 +405,12 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                 }
                 break;
             case 4:
+                // Wait for end byte
                 totalBytesInPacket++;
                 if (actbyte == BYTE_END || actbyte == (byte)0xC1) {
                     processCompletePacket();
-                } else if (totalBytesInPacket > 35) {
+                } else if (totalBytesInPacket > 60) {
+                    // Invalid packet, reset
                     PACKET_readstate = 0;
                 }
                 break;
@@ -417,36 +418,59 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     }
 
     private void processCompletePacket() {
+        PACKET_readstate = 0;
+
+        // Auto-detect channel count from first complete packet
+        // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
+        // So N = (totalBytesInPacket - 9) / 3
+        if (!channelsDetected && totalBytesInPacket > 9) {
+            int detectedChannels = (totalBytesInPacket - 9) / 3;
+            if (detectedChannels == 8 || detectedChannels == 16) {
+                numEegChannels = detectedChannels;
+                channelsDetected = true;
+                println("BoardCytonSerialDirect: Auto-detected " + numEegChannels + " EEG channels");
+                // Reinitialize smoothing buffer with correct channel count
+                if (smoothData) {
+                    buffer = new Buffer<double[]>(getTotalChannelCount(), (int)SAMPLE_RATE);
+                }
+            }
+        }
+
+        // Skip packets until channels are detected
+        if (!channelsDetected) {
+            return;
+        }
+
         packetCount++;
         lastPacketTime = System.currentTimeMillis();
-        PACKET_readstate = 0;
 
         if (packetCount % 500 == 0) {
             println("BoardCytonSerialDirect: Packets: " + packetCount);
         }
 
-        // Debug: print first few EEG values for first 3 packets
+        // Debug: print first few EEG values
         if (packetCount <= 3) {
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < NUM_EEG_CHANNELS; i++) {
+            for (int i = 0; i < numEegChannels; i++) {
                 sb.append(String.format("ch%d=%.1f ", i, parsedEegValues[i]));
             }
-            println("Packet #" + packetCount + ": " + sb.toString());
+            println("Packet #" + packetCount + " (" + numEegChannels + "ch): " + sb.toString());
         }
 
         double timestamp = System.currentTimeMillis() / 1000.0;
 
-        // Build sample: [EEG0..7, Aux0..2, Timestamp, SampleIndex, Marker]
-        double[] sample = new double[getTotalChannelCount()];
-        for (int i = 0; i < NUM_EEG_CHANNELS; i++) {
+        // Build sample: [EEG0..N, Aux0..2, Timestamp, SampleIndex, Marker]
+        int totalChannels = getTotalChannelCount();
+        double[] sample = new double[totalChannels];
+        for (int i = 0; i < numEegChannels; i++) {
             sample[i] = parsedEegValues[i];
         }
         for (int i = 0; i < NUM_AUX_CHANNELS; i++) {
-            sample[NUM_EEG_CHANNELS + i] = parsedAuxValues[i];
+            sample[numEegChannels + i] = parsedAuxValues[i];
         }
-        sample[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS] = timestamp;
-        sample[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 1] = packetCount % 256;
-        sample[NUM_EEG_CHANNELS + NUM_AUX_CHANNELS + 2] = 0;
+        sample[numEegChannels + NUM_AUX_CHANNELS] = timestamp;
+        sample[numEegChannels + NUM_AUX_CHANNELS + 1] = packetCount % 256;
+        sample[numEegChannels + NUM_AUX_CHANNELS + 2] = 0;
 
         synchronized (dataLock) {
             pendingDataQueue.add(sample);
@@ -457,6 +481,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 ///////////////////////////////////////////////////////////////////////////////
 //
 // BoardCytonSerialDirectDaisy - Direct USB serial for 16-channel Cyton+Daisy
+// Now uses dynamic channel detection from BoardCytonSerialDirect
 //
 ///////////////////////////////////////////////////////////////////////////////
 
