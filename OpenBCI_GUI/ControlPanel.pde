@@ -231,13 +231,13 @@ class ControlPanel {
                 }
             } else if (eegDataSource == DATASOURCE_CYTON_SERIAL) {
                 // Direct USB serial layout: all panels top-aligned horizontally
-                comPortBox.x = dataSourceBox.x + dataSourceBox.w;
+                dataLogBoxCyton.x = dataSourceBox.x + dataSourceBox.w;
+                dataLogBoxCyton.y = dataSourceBox.y;
+                dataLogBoxCyton.draw();
+                comPortBox.x = dataLogBoxCyton.x + dataLogBoxCyton.w;
                 comPortBox.y = dataSourceBox.y;
                 comPortBox.draw();
                 comPortBox.serialList.setVisible(true);
-                dataLogBoxCyton.x = comPortBox.x + comPortBox.w;
-                dataLogBoxCyton.y = dataSourceBox.y;
-                dataLogBoxCyton.draw();
             } else if (eegDataSource == DATASOURCE_PLAYBACKFILE) { //when data source is from playback file
                 recentPlaybackBox.draw();
                 playbackFileBox.draw();
@@ -542,7 +542,7 @@ class ComPortBox {
         x = _x;
         y = _y;
         w = _w + 10;
-        h = 140 + _padding;
+        h = 170 + _padding; // Increased to show 5 serial ports
         padding = _padding;
         isShowing = false;
         cytonRadioCfg = new RadioConfig();
@@ -552,14 +552,14 @@ class ComPortBox {
         cytoncpb_cp5.setGraphics(ourApplet, 0,0);
         cytoncpb_cp5.setAutoDraw(false);
 
-        createRefreshCytonDonglesButton("refreshCytonDonglesButton", "REFRESH LIST", x + padding, y + padding*4 + 72 + 8, w - padding*2, 24);
-        createCytonDongleList(cytoncpb_cp5, "cytonDongleList", x + padding, y + padding*3 + 8,  w - padding*2, 72, p3);
+        createRefreshCytonDonglesButton("refreshCytonDonglesButton", "REFRESH LIST", x + padding, y + padding*4 + 102 + 8, w - padding*2, 24);
+        createCytonDongleList(cytoncpb_cp5, "cytonDongleList", x + padding, y + padding*3 + 8,  w - padding*2, 102, p3);
     }
 
     public void update() {
         // Reposition internal elements when box position changes
         serialList.setPosition(x + padding, y + padding*3 + 8);
-        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 72 + 8);
+        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 102 + 8);
         serialList.updateMenu();
         //Allow two drawing/update cycles to pass so that overlay can be drawn
         //This lets users know that auto-scan is working and GUI is not frozen
@@ -576,7 +576,7 @@ class ComPortBox {
     public void draw() {
         // Reposition internal elements when box position changes
         serialList.setPosition(x + padding, y + padding*3 + 8);
-        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 72 + 8);
+        refreshCytonDongles.setPosition(x + padding, y + padding*4 + 102 + 8);
 
         pushStyle();
         fill(boxColor);
