@@ -6,7 +6,7 @@ Processing 4 (Java) desktop app for EEG data visualization. All source lives in 
 
 ## Build
 
-Requires Processing 4 installed at `/Applications/Processing.app` (macOS) or equivalent.
+Requires Processing 4.2 installed at `/Applications/Processing42.app` (macOS) or equivalent.
 
 ```bash
 # Copy bundled libraries to Processing's library directory (one-time or after library changes)
@@ -39,6 +39,7 @@ Currently tested modules: `PacketLossTracker`, `TimeTrackingQueue`.
   - `W_*.pde` — individual widgets (TimeSeries, FFT, Networking, etc.)
   - `WidgetManager.pde` — widget registry; add new widgets here
   - `W_Template.pde` — starting point for new widgets
+  - `HeadPlotElectrodes.pde` — shared component for 10-20 electrode layout
   - `libraries/` — bundled Processing libraries (controlP5, grafica, LSL, minim, oscP5, etc.)
 - `GuiUnitTests/` — unit test sketch
 - `release/` — build/package scripts (`build.py`, `package.py`)
@@ -55,3 +56,24 @@ Currently tested modules: `PacketLossTracker`, `TimeTrackingQueue`.
 ## CI
 
 Three platform workflows in `.github/workflows/`: `mac_build_deploy.yml`, `windows_build_deploy.yml`, `linux_build_deploy.yml`. All install Processing 4.2, copy libraries, build, and package. macOS and Windows also run unit tests. Deploy uploads to S3.
+
+## Architecture
+
+### Channel visibility system
+
+- Global `boolean[] channelVisibility` array in `OpenBCI_GUI.pde` is the single source of truth
+- All widgets iterate `nchan` and check `channelVisibility[i]` directly — no per-widget ChannelSelect
+- `ChannelSelectorPopup` in `TopNav.pde` provides Swing JFrame-based head-plot UI for toggling visibility
+- `HeadPlotElectrodes.pde` — reusable component for 10-20 electrode positions, used by both HeadPlot widget and ChannelSelectorPopup
+
+### Hardware support
+
+- `BoardCytonSerialDirect.pde` — Direct USB serial at 921600 baud, auto-detects 8/16/32 channels from packet size
+- 32-channel maps to standard 10-20 order: Ch1=Fp1, Ch2=Fp2, ..., Ch32=O2
+
+### Swing popups (not PApplet)
+
+- PApplet windows create separate OpenGL contexts that crash when sharing with main window
+- Use Swing JFrame with `Graphics2D` for popups requiring native window features (title bar, drag, resize)
+- MouseListener must be on JPanel (content pane), not JFrame, to avoid coordinate offset from title bar
+- Processing compiler does not recognize JFrame methods on typed variables — must recreate popup each time
