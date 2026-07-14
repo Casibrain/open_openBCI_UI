@@ -163,7 +163,7 @@ class W_fft extends Widget {
         //Update and draw active channels that have been selected via channel select for this widget
         for (int j = 0; j < fftChanSelect.activeChan.size(); j++) {
             int chan = fftChanSelect.activeChan.get(j);
-            fft_plot.setLineColor(lineColor[chan]);
+            fft_plot.setLineColor(lineColor[chan % lineColor.length]);
             //remap fft point arrays to fft plots
             fft_plot.setPoints(fft_points[chan]);
             fft_plot.drawLines();

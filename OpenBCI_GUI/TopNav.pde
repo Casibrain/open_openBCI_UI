@@ -10,6 +10,18 @@
 import java.awt.Desktop;
 import java.net.*;
 import java.nio.file.*;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.BasicStroke;
 
 class TopNav {
 
@@ -25,6 +37,7 @@ class TopNav {
 
     public Button filtersButton;
     public Button smoothingButton;
+    public Button channelSelectButton;
 
     public Button debugButton;
 
@@ -33,6 +46,7 @@ class TopNav {
 
     public LayoutSelector layoutSelector;
     public ConfigSelector configSelector;
+    public ChannelSelectorPopup channelSelectorPopup;
     private int previousSystemMode = 0;
 
     private boolean secondaryNavInit = false;
@@ -89,6 +103,10 @@ class TopNav {
             int pos_x = (int)filtersButton.getPosition()[0] + filtersButton.getWidth() + PAD_3;
             //Make smoothing button wider than most other topnav buttons to fit text comfortably
             createSmoothingButton(getSmoothingString(), pos_x, SUBNAV_BUT_Y, SUBNAV_BUT_W + 48, SUBNAV_BUT_H, h4, 14, SUBNAV_LIGHTBLUE, WHITE);
+
+            //Add channel select button after smoothing button
+            int chanPos_x = (int)smoothingButton.getPosition()[0] + smoothingButton.getWidth() + PAD_3;
+            createChannelSelectButton("Channels", chanPos_x, SUBNAV_BUT_Y, SUBNAV_BUT_W + 20, SUBNAV_BUT_H, h4, 14, SUBNAV_LIGHTBLUE, WHITE);
         }
         
         
@@ -269,6 +287,16 @@ class TopNav {
             }
         });
         smoothingButton.setDescription("The default settings for the Cyton Dongle driver can make data appear \"choppy.\" This feature will \"smooth\" the data for you. Click \"Help\" -> \"Cyton Driver Fix\" for more info. Clicking here will toggle this setting.");
+    }
+
+    private void createChannelSelectButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
+        channelSelectButton = createTNButton("channelSelectButton", text, _x, _y, _w, _h, font, _fontSize, _bg, _textColor);
+        channelSelectButton.onRelease(new CallbackListener() {
+            public void controlEvent(CallbackEvent theEvent) {
+                channelSelectorPopup = new ChannelSelectorPopup();
+            }
+        });
+        channelSelectButton.setDescription("Click to configure which EEG channels are visible across all widgets.");
     }
 
     private void createLayoutButton(String text, int _x, int _y, int _w, int _h, PFont font, int _fontSize, color _bg, color _textColor) {
@@ -774,4 +802,248 @@ class ConfigSelector {
             expertMode.setColorBackground(BUTTON_NOOBGREEN);
         }
     } 
+}
+
+// Global Channel Selector Popup - PApplet window like FilterUI
+public boolean channelSelectorPopupIsOpen = false;
+
+class ChannelSelectorPopup extends JFrame implements MouseMotionListener, MouseListener {
+    private HeadPlotElectrodes headPlot;
+    private boolean[] elecVisible;
+    private int headerH = 36;
+    private int allBtnX, allBtnY, allBtnW = 55, allBtnH = 24;
+    private int noneBtnX, noneBtnY, noneBtnW = 55, noneBtnH = 24;
+    private boolean allBtnHover = false;
+    private boolean noneBtnHover = false;
+    private Color headerColor = new Color(57, 128, 204);
+    private Color bgColor = new Color(235, 235, 235);
+    private Color darkBlue = new Color(41, 89, 136);
+    private Color green = new Color(76, 175, 80);
+    private Color hoverColor = new Color(70, 140, 220);
+
+    ChannelSelectorPopup() {
+        super("Channels");
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setSize(450, 450);
+        setLocationRelativeTo(null);
+        setResizable(true);
+        setAlwaysOnTop(false);
+
+        headPlot = new HeadPlotElectrodes(false);
+        elecVisible = new boolean[32];
+        for (int i = 0; i < 32; i++) elecVisible[i] = true;
+        for (int i = 0; i < min(nchan, 32); i++) {
+            elecVisible[i] = channelVisibility[i];
+        }
+
+        // Custom panel for drawing
+        JPanel contentPane = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                drawContent((Graphics2D)g);
+            }
+        };
+        contentPane.addMouseListener(this);
+        contentPane.addMouseMotionListener(this);
+        setContentPane(contentPane);
+
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                channelSelectorPopupIsOpen = false;
+            }
+        });
+
+        setVisible(true);
+        channelSelectorPopupIsOpen = true;
+    }
+
+    private void drawContent(Graphics2D g2) {
+        int w = getWidth();
+        int h = getHeight();
+
+        // Background
+        g2.setColor(bgColor);
+        g2.fillRect(0, 0, w, h);
+
+        // Header
+        g2.setColor(headerColor);
+        g2.fillRect(0, 0, w, headerH);
+
+        // Title
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Arial", Font.BOLD, 14));
+        g2.drawString("Channels", 12, headerH/2 + 5);
+
+        // All button
+        allBtnX = w - allBtnW * 2 - 18;
+        allBtnY = (headerH - allBtnH) / 2;
+        g2.setColor(allBtnHover ? hoverColor : new Color(255, 255, 255, 60));
+        g2.fillRoundRect(allBtnX, allBtnY, allBtnW, allBtnH, 6, 6);
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Arial", Font.PLAIN, 11));
+        FontMetrics fm = g2.getFontMetrics();
+        g2.drawString("All", allBtnX + (allBtnW - fm.stringWidth("All"))/2, allBtnY + (allBtnH + fm.getAscent() - fm.getDescent())/2 - 1);
+
+        // None button
+        noneBtnX = allBtnX + allBtnW + 10;
+        noneBtnY = allBtnY;
+        g2.setColor(noneBtnHover ? hoverColor : new Color(255, 255, 255, 60));
+        g2.fillRoundRect(noneBtnX, noneBtnY, noneBtnW, noneBtnH, 6, 6);
+        g2.setColor(Color.WHITE);
+        g2.drawString("None", noneBtnX + (noneBtnW - fm.stringWidth("None"))/2, noneBtnY + (noneBtnH + fm.getAscent() - fm.getDescent())/2 - 1);
+
+        // Head plot area
+        int headAreaY = headerH + 10;
+        int headAreaH = h - headerH - 60;
+        int cx = w / 2;
+        int cy = headAreaY + headAreaH / 2;
+        int r = Math.min(w, headAreaH) / 2 - 30;
+
+        headPlot.setPosition(cx, cy, r);
+
+        // Draw head circle
+        g2.setColor(darkBlue);
+        g2.setStroke(new BasicStroke(2));
+        g2.drawOval(cx - r, cy - r, r * 2, r * 2);
+
+        // Draw nose
+        int[] noseX = {cx - 10, cx + 10, cx};
+        int[] noseY = {cy - r + 5, cy - r + 5, cy - r - 15};
+        g2.fillPolygon(noseX, noseY, 3);
+
+        // Draw electrodes
+        int elecDiam = Math.max(18, r / 6);
+        int numToDraw = min(nchan, 32);
+        String[] names = headPlot.getNames();
+        float[][] positions = headPlot.getPositions();
+
+        for (int i = 0; i < numToDraw; i++) {
+            int ex = cx + (int)(positions[i][0] * r * 2);
+            int ey = cy + (int)(positions[i][1] * r * 2);
+
+            if (elecVisible[i]) {
+                g2.setColor(green);
+            } else {
+                g2.setColor(new Color(180, 180, 180));
+            }
+            g2.setStroke(new BasicStroke(1));
+            g2.setColor(darkBlue);
+            g2.drawOval(ex - elecDiam/2, ey - elecDiam/2, elecDiam, elecDiam);
+            if (elecVisible[i]) {
+                g2.setColor(green);
+            } else {
+                g2.setColor(new Color(180, 180, 180));
+            }
+            g2.fillOval(ex - elecDiam/2 + 1, ey - elecDiam/2 + 1, elecDiam - 2, elecDiam - 2);
+
+            // Name
+            g2.setColor(elecVisible[i] ? Color.WHITE : new Color(120, 120, 120));
+            g2.setFont(new Font("Arial", Font.PLAIN, 9));
+            FontMetrics nfm = g2.getFontMetrics();
+            g2.drawString(names[i], ex - nfm.stringWidth(names[i])/2, ey + nfm.getAscent()/2 - 1);
+        }
+    }
+
+    @Override
+    public void mouseMoved(MouseEvent e) {
+        int mx = e.getX(), my = e.getY();
+        boolean newAllHover = mx >= allBtnX && mx <= allBtnX + allBtnW && my >= allBtnY && my <= allBtnY + allBtnH;
+        boolean newNoneHover = mx >= noneBtnX && mx <= noneBtnX + noneBtnW && my >= noneBtnY && my <= noneBtnY + noneBtnH;
+        if (newAllHover != allBtnHover || newNoneHover != noneBtnHover) {
+            allBtnHover = newAllHover;
+            noneBtnHover = newNoneHover;
+            repaint();
+        }
+    }
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+        int mx = e.getX(), my = e.getY();
+
+        // Check All button
+        if (mx >= allBtnX && mx <= allBtnX + allBtnW && my >= allBtnY && my <= allBtnY + allBtnH) {
+            for (int i = 0; i < min(nchan, 32); i++) {
+                elecVisible[i] = true;
+                channelVisibility[i] = true;
+            }
+            syncAllWidgetChannelSelects();
+            repaint();
+            return;
+        }
+
+        // Check None button
+        if (mx >= noneBtnX && mx <= noneBtnX + noneBtnW && my >= noneBtnY && my <= noneBtnY + noneBtnH) {
+            for (int i = 0; i < min(nchan, 32); i++) {
+                elecVisible[i] = false;
+                channelVisibility[i] = false;
+            }
+            syncAllWidgetChannelSelects();
+            repaint();
+            return;
+        }
+
+        // Check electrode clicks
+        int w = getWidth();
+        int h = getHeight();
+        int headAreaY = headerH + 10;
+        int headAreaH = h - headerH - 60;
+        int cx = w / 2;
+        int cy = headAreaY + headAreaH / 2;
+        int r = Math.min(w, headAreaH) / 2 - 30;
+        int elecDiam = Math.max(18, r / 6);
+        float[][] positions = headPlot.getPositions();
+
+        for (int i = 0; i < min(nchan, 32); i++) {
+            int ex = cx + (int)(positions[i][0] * r * 2);
+            int ey = cy + (int)(positions[i][1] * r * 2);
+            double dist = Math.sqrt((mx - ex) * (mx - ex) + (my - ey) * (my - ey));
+            if (dist < elecDiam / 2) {
+                elecVisible[i] = !elecVisible[i];
+                channelVisibility[i] = elecVisible[i];
+                syncAllWidgetChannelSelects();
+                repaint();
+                return;
+            }
+        }
+    }
+
+    @Override public void mouseClicked(MouseEvent e) {}
+    @Override public void mouseReleased(MouseEvent e) {}
+    @Override public void mouseEntered(MouseEvent e) {}
+    @Override public void mouseExited(MouseEvent e) {
+        if (allBtnHover || noneBtnHover) {
+            allBtnHover = false;
+            noneBtnHover = false;
+            repaint();
+        }
+    }
+    @Override public void mouseDragged(MouseEvent e) {}
+
+    private void syncAllWidgetChannelSelects() {
+        if (w_timeSeries != null && w_timeSeries.tsChanSelect != null) {
+            w_timeSeries.tsChanSelect.syncWithGlobalVisibility();
+        }
+        if (w_fft != null && w_fft.fftChanSelect != null) {
+            w_fft.fftChanSelect.syncWithGlobalVisibility();
+        }
+        if (w_focus != null && w_focus.focusChanSelect != null) {
+            w_focus.focusChanSelect.syncWithGlobalVisibility();
+        }
+        if (w_bandPower != null && w_bandPower.bpChanSelect != null) {
+            w_bandPower.bpChanSelect.syncWithGlobalVisibility();
+        }
+        if (w_emg != null && w_emg.emgChannelSelect != null) {
+            w_emg.emgChannelSelect.syncWithGlobalVisibility();
+        }
+        if (w_spectrogram != null) {
+            if (w_spectrogram.spectChanSelectTop != null) {
+                w_spectrogram.spectChanSelectTop.syncWithGlobalVisibility();
+            }
+            if (w_spectrogram.spectChanSelectBot != null) {
+                w_spectrogram.spectChanSelectBot.syncWithGlobalVisibility();
+            }
+        }
+    }
 }

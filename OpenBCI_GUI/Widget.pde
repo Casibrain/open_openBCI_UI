@@ -440,8 +440,13 @@ class ChannelSelect {
             channelSelectHover = false;
         }
         //Update position of buttons on every update and check for UI overlap
+        int maxPerRow = 16;
         for (int i = 0; i < nchan; i++) {
-            channelButtons.get(i).setPosition(x + labelWidth + labelSpacer + (button_spacer*(i+1)) + (buttonW*i), y + offset);
+            int row = i / maxPerRow;
+            int col = i % maxPerRow;
+            int btnX = x + labelWidth + labelSpacer + (button_spacer * (col + 1)) + (buttonW * col);
+            int btnY = y + offset + row * (buttonH + 2);
+            channelButtons.get(i).setPosition(btnX, btnY);
         }
     }
 
@@ -527,21 +532,34 @@ class ChannelSelect {
         channelSelectHover = false;
         isVisible = false;
 
-        buttonW = checkSize;
-        buttonH = buttonW;
+        buttonW = checkSize * 2; //double width to avoid text overlap
+        buttonH = checkSize;
+        int maxPerRow = 16;
+
+        // Get channel names from board if available
+        String[] names = null;
+        if (currentBoard instanceof Board) {
+            names = ((Board)currentBoard).getChannelNames();
+        }
 
         for (int i = 0; i < _nchan; i++) {
+            String btnName = "ch"+(i+1);
+            String displayName = (names != null && i < names.length) ? names[i] : String.valueOf(i+1);
+            int row = i / maxPerRow;
+            int col = i % maxPerRow;
+            int btnX = x + (button_spacer * (col + 1)) + (buttonW * col);
+            int btnY = y + offset + row * (buttonH + 2);
             //start all items as invisible until user clicks dropdown to show checkboxes
             channelButtons.add(
-                createButton("ch"+(i+1), (i+1), true, x + (button_spacer*(i+2)) + (buttonW*i), y + offset, buttonW, buttonH)
+                createButton(btnName, i, displayName, true, btnX, btnY, buttonW, buttonH)
             );
             cp5ElementsToCheck.add((controlP5.Controller)channelButtons.get(i));
         }
     }
 
-    private Toggle createButton(String name, int chan, boolean _isVisible, int _x, int _y, int _w, int _h) {
-        int _fontSize = 12;
-        int marginLeftOffset = chan > 9 ? -9 : -6;
+    private Toggle createButton(String name, int chanIndex, String displayName, boolean _isVisible, int _x, int _y, int _w, int _h) {
+        int _fontSize = 10;
+        int marginLeftOffset = -6;
         Toggle myButton = cp5_chanSelect.addToggle(name)
             .setPosition(_x, _y)
             .setSize(_w, _h)
@@ -556,17 +574,18 @@ class ChannelSelect {
             .setFont(createFont("Arial", _fontSize, true))
             .toUpperCase(false)
             .setSize(_fontSize)
-            .setText(String.valueOf(chan))
+            .setText(displayName)
             .getStyle() //need to grab style before affecting margin and padding
             .setMargin(-_h - 3, 0, 0, marginLeftOffset)
             .setPaddingLeft(10)
             ;
         myButton.onPress(new CallbackListener() {
             public void controlEvent(CallbackEvent theEvent) {
-                int chan = Integer.parseInt(((Toggle)theEvent.getController()).getCaptionLabel().getText()) - 1;  
+                // Extract channel index from button name (e.g., "ch1" -> 0, "ch2" -> 1)
+                String btnName = theEvent.getController().getName();
+                int chan = Integer.parseInt(btnName.substring(2)) - 1;
                 boolean b = ((Toggle)theEvent.getController()).getBooleanValue();
                 setToggleState(chan, b);
-                //println(widget + " || " + activeChan);
             }
         });
         return myButton;
@@ -613,8 +632,24 @@ class ChannelSelect {
 
     public void activateAllButtons() {
         for (int i = 0; i < nchan; i++) {
-            channelButtons.get(i).setState(true);
-            activeChan.add(i);
+            boolean visible = (channelVisibility != null && i < channelVisibility.length) ? channelVisibility[i] : true;
+            channelButtons.get(i).setState(visible);
+            if (visible) {
+                activeChan.add(i);
+            }
+        }
+        Collections.sort(activeChan);
+    }
+
+    // Sync with global channelVisibility array
+    public void syncWithGlobalVisibility() {
+        activeChan.clear();
+        for (int i = 0; i < nchan; i++) {
+            boolean visible = (channelVisibility != null && i < channelVisibility.length) ? channelVisibility[i] : true;
+            channelButtons.get(i).setState(visible);
+            if (visible) {
+                activeChan.add(i);
+            }
         }
         Collections.sort(activeChan);
     }

@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //------------------------------------------------------------------------
 //Used to check GUI version in TopNav.pde and displayed on the splash screen on startup
 String localGUIVersionString = "v6.0.0-beta.1";
-String localGUIVersionDate = "2026/07/12 20:11:52";
+String localGUIVersionDate = "2026/07/12 20:17:56";
 
 PApplet ourApplet;
 
@@ -140,6 +140,21 @@ String brainflowStreamer = "";
 ////// ---- Define variables related to OpenBCI board operations
 //Define number of channels from cyton...first EEG channels, then aux channels
 int nchan = NCHAN_CYTON; //Normally, 8 or 16.  Choose a smaller number to show fewer on the GUI
+
+// Global channel visibility array - all widgets read from this
+boolean[] channelVisibility = {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+
+// Standard 10-20 system electrode names for 32 channels
+final String[] CHAN_NAMES_1020 = {
+    "Fp1", "Fp2", "AF3", "AF4",
+    "F7", "F3", "Fz", "F4", "F8",
+    "FC5", "FC1", "FC2", "FC6",
+    "T7", "C3", "Cz", "C4", "T8",
+    "CP5", "CP1", "CP2", "CP6",
+    "P7", "P3", "Pz", "P4", "P8",
+    "PO3", "POz", "PO4",
+    "O1", "O2"
+};
 
 //define variables related to warnings to the user about whether the EEG data is nearly railed (and, therefore, of dubious quality)
 DataStatus is_railed[];
@@ -1004,6 +1019,24 @@ void updateToNChan(int _nchan) {
     settings.slnchan = _nchan; //used in SoftwareSettings.pde only
     fftBuff = new ddf.minim.analysis.FFT[nchan];  //reinitialize the FFT buffer
     println("OpenBCI_GUI: Channel count set to " + str(nchan));
+
+    // Initialize global channel visibility - all channels visible by default
+    channelVisibility = new boolean[nchan];
+    for (int i = 0; i < nchan; i++) channelVisibility[i] = true;
+
+    // Reinitialize all channel-dependent data buffers
+    initCoreDataObjects();
+    initFFTObjectsAndBuffer();
+
+    // Reinitialize filter settings with new channel count
+    filterSettings = new FilterSettings((DataSource)currentBoard);
+
+    // Reinitialize Board's accumulated data and packet loss tracker with new channel count
+    if (currentBoard != null && currentBoard instanceof Board) {
+        Board board = (Board) currentBoard;
+        board.reinitAccumulatedData();
+        board.packetLossTracker = board.setupPacketLossTracker();
+    }
 
     // Update TimeSeries widget if initialized
     if (w_timeSeries != null) {

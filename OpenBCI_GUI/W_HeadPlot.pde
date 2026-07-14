@@ -204,6 +204,18 @@ class HeadPlot {
     public boolean hardCalcsDone = false;
     public boolean threadLock = false;
 
+    // Standard 10-20 system electrode names for 32 channels
+    private final String[] ELEC_NAMES_32 = {
+        "Fp1", "Fp2", "AF3", "AF4",
+        "F7", "F3", "Fz", "F4", "F8",
+        "FC5", "FC1", "FC2", "FC6",
+        "T7", "C3", "Cz", "C4", "T8",
+        "CP5", "CP1", "CP2", "CP6",
+        "P7", "P3", "Pz", "P4", "P8",
+        "PO3", "POz", "PO4",
+        "O1", "O2"
+    };
+
     HeadPlot(int _x, int _y, int _w, int _h, int _win_x, int _win_y) {
         final int n_elec = nchan;  //set number of electrodes using the global nchan variable
         nose_x = new int[3];
@@ -235,6 +247,14 @@ class HeadPlot {
         rel_width = float(_w)/_win_x;
         rel_height = float(_h)/_win_y;
         setWindowDimensions(_win_x, _win_y);
+    }
+
+    // Recalculate heatmap weights based on current electrode positions (after drag)
+    public void recalculateWeights() {
+        if (headImage == null) return;
+        int n_wide_full = headImage.width;
+        int n_tall_full = headImage.height;
+        computePixelWeightingFactors_multiScale(n_wide_full, n_tall_full);
     }
 
     public void setIntensityData_byRef(float[] data, DataStatus[] is_rail) {
@@ -272,8 +292,8 @@ class HeadPlot {
         final int n_elec = electrode_xy.length;
 
         //define the head itself
-        float nose_relLen = 0.075f;
-        float nose_relWidth = 0.05f;
+        float nose_relLen = 0.10f;
+        float nose_relWidth = 0.06f;
         float nose_relGutter = 0.02f;
         float ear_relLen = 0.15f;
         float ear_relWidth = 0.075;
@@ -312,7 +332,7 @@ class HeadPlot {
 
         //define the electrode positions as the relative position [-1.0 +1.0] within the head
         //remember that negative "Y" is up and positive "Y" is down
-        float elec_relDiam = 0.12f; //was 0.1425 prior to 2014-03-23
+        float elec_relDiam = 0.08f; //reduced from 0.12f to prevent overlapping with 32 channels
         elec_diam = (int)(elec_relDiam*((float)circ_diam));
         setElectrodeLocations(n_elec, elec_relDiam);
 
@@ -377,47 +397,93 @@ class HeadPlot {
 
     private Table createDefaultElectrodeLocations(String fname, float elec_relDiam) {
 
-        //regular electrodes
-        float[][] elec_relXY = new float[16][2];
+        // Standard 10-20 system positions for up to 32 channels
+        // Coordinates are relative [-1.0, +1.0] within the head circle
+        // Negative X = left, Positive X = right
+        // Negative Y = anterior (nose), Positive Y = posterior (back)
+        float[][] elec_relXY = new float[32][2];
+
+        // Row 1: Fp1, Fp2 (frontal pole)
         elec_relXY[0][0] = -0.125f;
-        elec_relXY[0][1] = -0.5f + elec_relDiam*(0.5f+0.2f); //FP1
+        elec_relXY[0][1] = -0.5f + elec_relDiam*(0.5f+0.2f); //Fp1
         elec_relXY[1][0] = -elec_relXY[0][0];
-        elec_relXY[1][1] = elec_relXY[0][1]; //FP2
+        elec_relXY[1][1] = elec_relXY[0][1]; //Fp2
 
-        elec_relXY[2][0] = -0.2f;
-        elec_relXY[2][1] = 0f; //C3
+        // Row 2: AF3, AF4 (anterior frontal)
+        elec_relXY[2][0] = -0.18f;
+        elec_relXY[2][1] = -0.35f; //AF3
         elec_relXY[3][0] = -elec_relXY[2][0];
-        elec_relXY[3][1] = elec_relXY[2][1]; //C4
+        elec_relXY[3][1] = elec_relXY[2][1]; //AF4
 
-        elec_relXY[4][0] = -0.3425f;
-        elec_relXY[4][1] = 0.27f; //T5 (aka P7)
-        elec_relXY[5][0] = -elec_relXY[4][0];
-        elec_relXY[5][1] = elec_relXY[4][1]; //T6 (aka P8)
+        // Row 3: F7, F3, Fz, F4, F8 (frontal)
+        elec_relXY[4][0] = -0.42f;
+        elec_relXY[4][1] = -0.22f; //F7
+        elec_relXY[5][0] = -0.2f;
+        elec_relXY[5][1] = -0.22f; //F3
+        elec_relXY[6][0] = 0.0f;
+        elec_relXY[6][1] = -0.22f; //Fz
+        elec_relXY[7][0] = -elec_relXY[5][0];
+        elec_relXY[7][1] = elec_relXY[5][1]; //F4
+        elec_relXY[8][0] = -elec_relXY[4][0];
+        elec_relXY[8][1] = elec_relXY[4][1]; //F8
 
-        elec_relXY[6][0] = -0.125f;
-        elec_relXY[6][1] = +0.5f - elec_relDiam*(0.5f+0.2f); //O1
-        elec_relXY[7][0] = -elec_relXY[6][0];
-        elec_relXY[7][1] = elec_relXY[6][1];  //O2
-
-        elec_relXY[8][0] = elec_relXY[4][0];
-        elec_relXY[8][1] = -elec_relXY[4][1]; //F7
-        elec_relXY[9][0] = -elec_relXY[8][0];
-        elec_relXY[9][1] = elec_relXY[8][1]; //F8
-
-        elec_relXY[10][0] = -0.18f;
-        elec_relXY[10][1] = -0.15f; //C3
+        // Row 4: FC5, FC1, FC2, FC6 (frontal-central)
+        elec_relXY[9][0] = -0.33f;
+        elec_relXY[9][1] = -0.1f; //FC5
+        elec_relXY[10][0] = -0.12f;
+        elec_relXY[10][1] = -0.1f; //FC1
         elec_relXY[11][0] = -elec_relXY[10][0];
-        elec_relXY[11][1] = elec_relXY[10][1]; //C4
+        elec_relXY[11][1] = elec_relXY[10][1]; //FC2
+        elec_relXY[12][0] = -elec_relXY[9][0];
+        elec_relXY[12][1] = elec_relXY[9][1]; //FC6
 
-        elec_relXY[12][0] =  -0.5f +elec_relDiam*(0.5f+0.15f);
-        elec_relXY[12][1] = 0f; //T3 (aka T7?)
-        elec_relXY[13][0] = -elec_relXY[12][0];
-        elec_relXY[13][1] = elec_relXY[12][1]; //T4 (aka T8)
+        // Row 5: T7, C3, Cz, C4, T8 (central)
+        elec_relXY[13][0] = -0.5f + elec_relDiam*(0.5f+0.15f);
+        elec_relXY[13][1] = 0.0f; //T7
+        elec_relXY[14][0] = -0.2f;
+        elec_relXY[14][1] = 0.0f; //C3
+        elec_relXY[15][0] = 0.0f;
+        elec_relXY[15][1] = 0.0f; //Cz
+        elec_relXY[16][0] = -elec_relXY[14][0];
+        elec_relXY[16][1] = elec_relXY[14][1]; //C4
+        elec_relXY[17][0] = -elec_relXY[13][0];
+        elec_relXY[17][1] = elec_relXY[13][1]; //T8
 
-        elec_relXY[14][0] = elec_relXY[10][0];
-        elec_relXY[14][1] = -elec_relXY[10][1]; //CP3
-        elec_relXY[15][0] = -elec_relXY[14][0];
-        elec_relXY[15][1] = elec_relXY[14][1]; //CP4
+        // Row 6: CP5, CP1, CP2, CP6 (central-parietal)
+        elec_relXY[18][0] = -0.33f;
+        elec_relXY[18][1] = 0.1f; //CP5
+        elec_relXY[19][0] = -0.12f;
+        elec_relXY[19][1] = 0.1f; //CP1
+        elec_relXY[20][0] = -elec_relXY[19][0];
+        elec_relXY[20][1] = elec_relXY[19][1]; //CP2
+        elec_relXY[21][0] = -elec_relXY[18][0];
+        elec_relXY[21][1] = elec_relXY[18][1]; //CP6
+
+        // Row 7: P7, P3, Pz, P4, P8 (parietal)
+        elec_relXY[22][0] = -0.42f;
+        elec_relXY[22][1] = 0.22f; //P7
+        elec_relXY[23][0] = -0.2f;
+        elec_relXY[23][1] = 0.22f; //P3
+        elec_relXY[24][0] = 0.0f;
+        elec_relXY[24][1] = 0.22f; //Pz
+        elec_relXY[25][0] = -elec_relXY[23][0];
+        elec_relXY[25][1] = elec_relXY[23][1]; //P4
+        elec_relXY[26][0] = -elec_relXY[22][0];
+        elec_relXY[26][1] = elec_relXY[22][1]; //P8
+
+        // Row 8: PO3, POz, PO4 (parietal-occipital)
+        elec_relXY[27][0] = -0.15f;
+        elec_relXY[27][1] = 0.36f; //PO3
+        elec_relXY[28][0] = 0.0f;
+        elec_relXY[28][1] = 0.36f; //POz
+        elec_relXY[29][0] = -elec_relXY[27][0];
+        elec_relXY[29][1] = elec_relXY[27][1]; //PO4
+
+        // Row 9: O1, Oz, O2 (occipital)
+        elec_relXY[30][0] = -0.125f;
+        elec_relXY[30][1] = +0.5f - elec_relDiam*(0.5f+0.2f); //O1
+        elec_relXY[31][0] = -elec_relXY[30][0];
+        elec_relXY[31][1] = elec_relXY[30][1]; //O2
 
         //reference electrode
         float[] ref_elec_relXY = new float[2];
@@ -1023,6 +1089,10 @@ class HeadPlot {
         float high = intense_max_uV;
 
         for (int Ielec=0; Ielec<n_elec; Ielec++) {
+            // Skip hidden channels - don't contribute to heatmap
+            if (channelVisibility != null && Ielec < channelVisibility.length && !channelVisibility[Ielec]) {
+                continue;
+            }
             weight = electrode_color_weightFac[Ielec][pixel_Ix][pixel_Iy];
             elec_volt = max(low, min(intensity_data_uV[Ielec], high));
 
@@ -1097,7 +1167,10 @@ class HeadPlot {
         //compute the weighted average using the precomputed factors
         float new_rgb[] = {0.0, 0.0, 0.0}; //init to zeros
         for (int Ielec=0; Ielec < electrode_xy.length; Ielec++) {
-            //int Ielec = 0;
+            // Skip hidden channels - don't contribute to heatmap
+            if (channelVisibility != null && Ielec < channelVisibility.length && !channelVisibility[Ielec]) {
+                continue;
+            }
             weight = electrode_color_weightFac[Ielec][pixel_Ix][pixel_Iy];
             for (int Irgb=0; Irgb<3; Irgb++) {
                 new_rgb[Irgb] += weight*electrode_rgb[Irgb][Ielec];
@@ -1181,7 +1254,15 @@ class HeadPlot {
     }
 
     void mouseReleased() {
-        isDragging = false;
+        if (isDragging && mouse_over_elec_index > -1) {
+            // Electrode was dragged - recalculate heatmap with new positions
+            isDragging = false;
+            threadLock = true;
+            recalculateWeights();
+            threadLock = false;
+        } else {
+            isDragging = false;
+        }
     }
 
     public boolean isPixelInsideHead(int pixel_x, int pixel_y) {
@@ -1226,7 +1307,6 @@ class HeadPlot {
         //draw head parts
         fill(WHITE);
         stroke(GREY_125);
-        triangle(nose_x[0], nose_y[0], nose_x[1], nose_y[1], nose_x[2], nose_y[2]);  //nose
         ellipse(earL_x, earL_y, ear_width, ear_height); //little circle for the ear
         ellipse(earR_x, earR_y, ear_width, ear_height); //little circle for the ear
 
@@ -1242,11 +1322,21 @@ class HeadPlot {
             ellipse(circ_x, circ_y, circ_diam, circ_diam); //big circle for the head
         }
 
+        //draw nose AFTER head and contours so it's always visible
+        fill(WHITE);
+        stroke(GREY_125);
+        strokeWeight(1);
+        triangle(nose_x[0], nose_y[0], nose_x[1], nose_y[1], nose_x[2], nose_y[2]);  //nose
+
         //draw electrodes on the head
         if (!isDragging) {
             mouse_over_elec_index = -1;
         }
         for (int Ielec=0; Ielec < electrode_xy.length; Ielec++) {
+            // Skip hidden channels
+            if (channelVisibility != null && Ielec < channelVisibility.length && !channelVisibility[Ielec]) {
+                continue;
+            }
             if (drawHeadAsContours) {
                 noFill(); //make transparent to allow color to come through from below
             } else {
@@ -1264,15 +1354,20 @@ class HeadPlot {
             ellipse(electrode_xy[Ielec][0], electrode_xy[Ielec][1], elec_diam, elec_diam); //electrode circle
         }
 
-        //add labels to electrodes
+        //add labels to electrodes using 10-20 system names
         fill(OPENBCI_DARKBLUE);
-        textFont(font);
         textAlign(CENTER, CENTER);
+        textSize(10); //smaller font to fit inside reduced electrode circles
         for (int i=0; i < electrode_xy.length; i++) {
-            //text(Integer.toString(i),electrode_xy[i][0], electrode_xy[i][1]);
-            text(i+1, electrode_xy[i][0], electrode_xy[i][1]);
+            // Skip hidden channels
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) {
+                continue;
+            }
+            String label = (i < ELEC_NAMES_32.length) ? ELEC_NAMES_32[i] : Integer.toString(i+1);
+            text(label, electrode_xy[i][0], electrode_xy[i][1]);
         }
-        text("R", ref_electrode_xy[0], ref_electrode_xy[1]);
+        textSize(10);
+        // Ref label removed to avoid overlap with Cz
 
         popStyle();
     } //end of draw method

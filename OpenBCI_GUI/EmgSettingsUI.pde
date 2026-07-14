@@ -81,10 +81,19 @@ class EmgSettingsUI extends PApplet implements Runnable {
 
         channelCount = currentBoard.getNumEXGChannels();
 
+        // Count visible channels for height calculation
+        int visibleCount = 0;
+        for (int i = 0; i < channelCount; i++) {
+            if (channelVisibility == null || i >= channelVisibility.length || channelVisibility[i]) {
+                visibleCount++;
+            }
+        }
+        if (visibleCount == 0) visibleCount = channelCount; // fallback
+
         x = 0;
         y = 0;
         w = defaultWidth;
-        h = HEADER_HEIGHT + (channelCount * ROW_HEIGHT) + FOOTER_PADDING;
+        h = HEADER_HEIGHT + (visibleCount * ROW_HEIGHT) + FOOTER_PADDING;
     }
 
     @Override
@@ -193,9 +202,29 @@ class EmgSettingsUI extends PApplet implements Runnable {
         textLeading(12);
         textAlign(CENTER, CENTER);
 
+        int visibleRow = 0;
         for (int i = 0; i < channelCount; i++) {
+            // Skip hidden channels
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) {
+                if (windowLists[i] != null) windowLists[i].setVisible(false);
+                if (uvLimitLists[i] != null) uvLimitLists[i].setVisible(false);
+                if (creepIncLists[i] != null) creepIncLists[i].setVisible(false);
+                if (creepDecLists[i] != null) creepDecLists[i].setVisible(false);
+                if (minDeltaUvLists[i] != null) minDeltaUvLists[i].setVisible(false);
+                if (lowLimitLists[i] != null) lowLimitLists[i].setVisible(false);
+                continue;
+            }
+            // Show dropdowns for visible channels
+            if (windowLists[i] != null) windowLists[i].setVisible(true);
+            if (uvLimitLists[i] != null) uvLimitLists[i].setVisible(true);
+            if (creepIncLists[i] != null) creepIncLists[i].setVisible(true);
+            if (creepDecLists[i] != null) creepDecLists[i].setVisible(true);
+            if (minDeltaUvLists[i] != null) minDeltaUvLists[i].setVisible(true);
+            if (lowLimitLists[i] != null) lowLimitLists[i].setVisible(true);
+
             String channelLabel = channelCount > channelLabels.length ? "Channel " + Integer.toString(i + 1) : channelLabels[i];
-            text(channelLabel, x + colOffset, dropdownYPositions[i] + (DROPDOWN_HEIGHT / 2) - 2);
+            text(channelLabel, x + colOffset, dropdownYPositions[visibleRow] + (DROPDOWN_HEIGHT / 2) - 2);
+            visibleRow++;
         }
 
         popStyle();
@@ -205,33 +234,51 @@ class EmgSettingsUI extends PApplet implements Runnable {
         dropdownWidth = int((w - (DROPDOWN_SPACER * (NUM_COLUMNS + 1))) / NUM_COLUMNS);
         final int MAX_HEIGHT_ITEMS = 6;
 
+        int visibleRow = 0;
         for (int i = 0; i < channelCount; i++) {
+            // Skip hidden channels
+            boolean hidden = (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]);
             int dropdownX = x + DROPDOWN_SPACER * 2 + dropdownWidth;
-            dropdownYPositions[i] = HEADER_HEIGHT + int(y + ((ROW_HEIGHT) * i) + (((ROW_HEIGHT) - DROPDOWN_HEIGHT) / 2));
             final int buttonXIncrement = DROPDOWN_SPACER + dropdownWidth;
 
-            windowLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            if (hidden) {
+                // Position hidden dropdowns off-screen
+                int offScreenY = -1000;
+                windowLists[i].setPosition(dropdownX, offScreenY);
+                uvLimitLists[i].setPosition(dropdownX + buttonXIncrement, offScreenY);
+                creepIncLists[i].setPosition(dropdownX + buttonXIncrement*2, offScreenY);
+                creepDecLists[i].setPosition(dropdownX + buttonXIncrement*3, offScreenY);
+                minDeltaUvLists[i].setPosition(dropdownX + buttonXIncrement*4, offScreenY);
+                lowLimitLists[i].setPosition(dropdownX + buttonXIncrement*5, offScreenY);
+                continue;
+            }
+
+            dropdownYPositions[visibleRow] = HEADER_HEIGHT + int(y + ((ROW_HEIGHT) * visibleRow) + (((ROW_HEIGHT) - DROPDOWN_HEIGHT) / 2));
+
+            windowLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             windowLists[i].setSize(dropdownWidth, MAX_HEIGHT_ITEMS * DROPDOWN_HEIGHT);
             
             dropdownX += buttonXIncrement;
-            uvLimitLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            uvLimitLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             uvLimitLists[i].setSize(dropdownWidth, (uvLimitLists[i].getItems().size()+1) * DROPDOWN_HEIGHT);
 
             dropdownX += buttonXIncrement;
-            creepIncLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            creepIncLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             creepIncLists[i].setSize(dropdownWidth, MAX_HEIGHT_ITEMS * DROPDOWN_HEIGHT);
 
             dropdownX += buttonXIncrement;
-            creepDecLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            creepDecLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             creepDecLists[i].setSize(dropdownWidth, MAX_HEIGHT_ITEMS * DROPDOWN_HEIGHT);
 
             dropdownX += buttonXIncrement;
-            minDeltaUvLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            minDeltaUvLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             minDeltaUvLists[i].setSize(dropdownWidth, MAX_HEIGHT_ITEMS * DROPDOWN_HEIGHT);
 
             dropdownX += buttonXIncrement;
-            lowLimitLists[i].setPosition(dropdownX, dropdownYPositions[i]);
+            lowLimitLists[i].setPosition(dropdownX, dropdownYPositions[visibleRow]);
             lowLimitLists[i].setSize(dropdownWidth, MAX_HEIGHT_ITEMS * DROPDOWN_HEIGHT);
+
+            visibleRow++;
         }
     }
 

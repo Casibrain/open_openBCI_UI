@@ -531,7 +531,9 @@ class ChannelBar {
         cbCp5.setAutoDraw(false); //Setting this saves code as cp5 elements will only be drawn/visible when [cp5].draw() is called
 
         channelIndex = _channelIndex;
-        channelString = str(channelIndex + 1);
+        // Use actual channel name from board if available, otherwise fallback to number
+        String[] names = (currentBoard instanceof Board) ? ((Board)currentBoard).getChannelNames() : null;
+        channelString = (names != null && channelIndex < names.length) ? names[channelIndex] : str(channelIndex + 1);
 
         x = _x;
         y = _y;
@@ -539,8 +541,8 @@ class ChannelBar {
         h = _h;
         defaultH = h;
 
-        onOff_diameter = h > 26 ? 26 : h - 2;
-        createOnOffButton("onOffButton"+channelIndex, channelString, x + 6, y + int(h/2) - int(onOff_diameter/2), onOff_diameter, onOff_diameter);
+        onOff_diameter = h > 32 ? 32 : h - 2;
+        // On/off button removed - channel name is drawn as text label instead
 
         //Create GPlot for this Channel
         uiSpaceWidth = 36 + padding_4;
@@ -621,13 +623,6 @@ class ChannelBar {
 
         // update data in plot
         updatePlotPoints();
-
-        if(currentBoard.isEXGChannelActive(channelIndex)) {
-            onOffButton.setColorBackground(channelColors[channelIndex%8]); // power down == false, set color to vibrant
-        }
-        else {
-            onOffButton.setColorBackground(50); // power down == true, set to grey
-        }
     }
 
     private String getFmt(float val) {
@@ -663,6 +658,19 @@ class ChannelBar {
 
     public void draw(boolean hardwareSettingsAreOpen) {        
 
+        // Draw channel name as text label
+        try {
+            pushStyle();
+            fill(currentBoard.isEXGChannelActive(channelIndex) ? channelColors[channelIndex%8] : 50);
+            noStroke();
+            textFont(p5, 10);
+            textAlign(CENTER, CENTER);
+            text(channelString, x + 18, y + h/2);
+            popStyle();
+        } catch (Exception e) {
+            // Ignore rendering errors
+        }
+
         plot.beginDraw();
         plot.drawBox();
         plot.drawGridLines(GPlot.VERTICAL);
@@ -681,11 +689,15 @@ class ChannelBar {
         plot.endDraw();
 
         //draw channel holder background
-        pushStyle();
-        stroke(OPENBCI_BLUE_ALPHA50);
-        noFill();
-        rect(x,y,w,h);
-        popStyle();
+        try {
+            pushStyle();
+            stroke(OPENBCI_BLUE_ALPHA50);
+            noFill();
+            rect(x,y,w,h);
+            popStyle();
+        } catch (Exception e) {
+            // Ignore rendering errors
+        }
 
         //draw channelBar separator line in the middle of interChannelBarSpace
         if (!isBottomChannel()) {
@@ -806,9 +818,11 @@ class ChannelBar {
         yAxisMax.setPosition(x + uiSpaceWidth + padding, y + int(padding*1.5) - 2);
         yAxisMin.setPosition(x + uiSpaceWidth + padding, y + h - yAxisLabel_h - padding - 1);
 
-        onOff_diameter = h > 26 ? 26 : h - 2;
-        onOffButton.setSize(onOff_diameter, onOff_diameter);
-        onOffButton.setPosition(x + 6, y + int(h/2) - int(onOff_diameter/2));
+        onOff_diameter = h > 32 ? 32 : h - 2;
+        if (onOffButton != null) {
+            onOffButton.setSize(onOff_diameter, onOff_diameter);
+            onOffButton.setPosition(x + 6, y + int(h/2) - int(onOff_diameter/2));
+        }
     }
 
     public void updateCP5(PApplet _parent) {

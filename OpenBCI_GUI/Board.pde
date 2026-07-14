@@ -13,15 +13,20 @@ abstract class Board implements DataSource {
     public boolean initialize() {
         boolean res = initializeInternal();
 
+        reinitAccumulatedData();
+
+        packetLossTracker = setupPacketLossTracker();
+
+        return res;
+    }
+
+    // Reinitialize accumulatedData and emptyData when channel count changes
+    public void reinitAccumulatedData() {
         double[] fillData = new double[getTotalChannelCount()];
         accumulatedData.setSize(getCurrentBoardBufferSize());
         accumulatedData.fill(fillData);
 
         emptyData = new double[getTotalChannelCount()][0];
-
-        packetLossTracker = setupPacketLossTracker();
-
-        return res;
     }
 
     @Override
