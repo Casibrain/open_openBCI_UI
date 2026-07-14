@@ -113,7 +113,6 @@ class W_timeSeries extends Widget {
     private ControlP5 tscp5;
     private Button hwSettingsButton;
 
-    private ChannelSelect tsChanSelect;
     private ChannelBar[] channelBars;
     private PlaybackScrollbar scrollbar;
     private TimeDisplay timeDisplay;
@@ -141,11 +140,6 @@ class W_timeSeries extends Widget {
         tscp5 = new ControlP5(_parent);
         tscp5.setGraphics(_parent, 0,0);
         tscp5.setAutoDraw(false);
-
-        tsChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "TS_Channels");
-        //activate all channels in channelSelect by default for this widget
-        tsChanSelect.activateAllButtons();
-        cp5ElementsToCheck.addAll(tsChanSelect.getCp5ElementsForOverlapCheck());
 
         xF = float(x); //float(int( ... is a shortcut for rounding the float down... so that it doesn't creep into the 1px margin
         yF = float(y);
@@ -207,7 +201,10 @@ class W_timeSeries extends Widget {
         if (currentBoard instanceof ADS1299SettingsBoard) {
             hwSettingsButton = createHSCButton("HardwareSettings", "Hardware Settings", (int)(x0 + 80), (int)(y0 + navHeight + 1), 120, navHeight - 3);
             cp5ElementsToCheck.add((controlP5.Controller)hwSettingsButton);
-            adsSettingsController = new ADS1299SettingsController(_parent, tsChanSelect.activeChan, x_hsc, y_hsc, w_hsc, h_hsc, channelBarHeight);
+            // Use all channel indices for ADS1299 settings
+            ArrayList<Integer> allChans = new ArrayList<Integer>();
+            for (int i = 0; i < nchan; i++) allChans.add(i);
+            adsSettingsController = new ADS1299SettingsController(_parent, allChans, x_hsc, y_hsc, w_hsc, h_hsc, channelBarHeight);
         }
     }
 
@@ -233,42 +230,39 @@ class W_timeSeries extends Widget {
                 ChannelBar tempBar = new ChannelBar(pApplet, i, int(ts_x), channelBarY, int(ts_w), channelBarHeight, expand_default, expand_hover, expand_active, contract_default, contract_hover, contract_active);
                 channelBars[i] = tempBar;
             }
-
-            // Update channel select
-            tsChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "TS_Channels");
-            tsChanSelect.activateAllButtons();
         }
     }
 
     void update() {
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
 
-        // offset based on whether channel select or hardware settings are open or not
-        int chanSelectOffset = tsChanSelect.isVisible() ? navHeight : 0;
-        if (currentBoard instanceof ADS1299SettingsBoard) {
-            chanSelectOffset += adsSettingsController.getIsVisible() ? navHeight : 0;
+        // Count visible channels from global visibility
+        int visibleCount = 0;
+        for (int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && channelVisibility[i]) {
+                visibleCount++;
+            }
         }
+        if (visibleCount == 0) visibleCount = nchan;
 
         //Responsively size the channelBarHeight
-        channelBarHeight = int((ts_h - chanSelectOffset) / tsChanSelect.activeChan.size());
+        channelBarHeight = int(ts_h / visibleCount);
 
-        //Update channel checkboxes
-        tsChanSelect.update(x, y, w);
-
-        //Update and resize all active channels
-        for(int i = 0; i < tsChanSelect.activeChan.size(); i++) {
-            int activeChan = tsChanSelect.activeChan.get(i);
-            int channelBarY = int(ts_y + chanSelectOffset) + i*(channelBarHeight); //iterate through bar locations
-            //To make room for channel bar separator, subtract space between channel bars from height
+        //Update and resize all visible channels
+        int barIndex = 0;
+        for(int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) continue;
+            int channelBarY = int(ts_y) + barIndex * channelBarHeight;
             int cb_h = channelBarHeight - interChannelBarSpace;
-            channelBars[activeChan].resize(int(ts_x), channelBarY, int(ts_w), cb_h);
-            channelBars[activeChan].update();
+            channelBars[i].resize(int(ts_x), channelBarY, int(ts_w), cb_h);
+            channelBars[i].update();
+            barIndex++;
         }
         
         //Responsively size and update the HardwareSettingsController
         if (currentBoard instanceof ADS1299SettingsBoard) {
             int cb_h = channelBarHeight + interChannelBarSpace - 2;
-            int h_hsc = channelBarHeight * tsChanSelect.activeChan.size();        
+            int h_hsc = channelBarHeight * visibleCount;        
             adsSettingsController.resize((int)channelBars[0].plot.getPos()[0], (int)channelBars[0].plot.getPos()[1], (int)channelBars[0].plot.getOuterDim()[0], h_hsc, cb_h);
             adsSettingsController.update(); //update channel controller
         }
@@ -288,17 +282,16 @@ class W_timeSeries extends Widget {
         super.draw(); //calls the parent draw() method of Widget (DON'T REMOVE)
 
         //remember to refer to x,y,w,h which are the positioning variables of the Widget class
-        //draw channel bars
-        for (int i = 0; i < tsChanSelect.activeChan.size(); i++) {
-            int activeChan = tsChanSelect.activeChan.get(i);
-            channelBars[activeChan].draw(getAdsSettingsVisible());
+        //draw channel bars for visible channels
+        for (int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) continue;
+            channelBars[i].draw(getAdsSettingsVisible());
         }
 
         //Display playback scrollbar, timeDisplay, or ADSSettingsController depending on data source
-        if ((currentBoard instanceof FileBoard) && hasScrollbar) { //you will only ever see the playback widget in Playback Mode ... otherwise not visible
+        if ((currentBoard instanceof FileBoard) && hasScrollbar) {
             scrollbar.draw();
         } else if (currentBoard instanceof ADS1299SettingsBoard) {
-            //Hide time display when ADSSettingsController is open for compatible boards
             if (!getAdsSettingsVisible()) {
                 timeDisplay.draw();
             }
@@ -308,8 +301,6 @@ class W_timeSeries extends Widget {
         }
 
         tscp5.draw();
-        
-        tsChanSelect.draw();
     }
 
     void screenResized() {
@@ -317,8 +308,6 @@ class W_timeSeries extends Widget {
 
         //Very important to allow users to interact with objects after app resize
         tscp5.setGraphics(ourApplet, 0,0);
-        
-        tsChanSelect.screenResized(pApplet);
 
         xF = float(x); //float(int( ... is a shortcut for rounding the float down... so that it doesn't creep into the 1px margin
         yF = float(y);
@@ -346,20 +335,16 @@ class W_timeSeries extends Widget {
             timeDisplay.screenResized(int(ts_x), int(ts_y + hF - td_h), int(ts_w), td_h);
         }
 
-        // offset based on whether channel select is open or not.
-        int chanSelectOffset = 0;
-        if (tsChanSelect.isVisible()) {
-            chanSelectOffset = navHeight;
-        }
-        
         for (ChannelBar cb : channelBars) {
             cb.updateCP5(ourApplet);
         }
         
-        for(int i = 0; i < tsChanSelect.activeChan.size(); i++) {
-            int activeChan = tsChanSelect.activeChan.get(i);
-            int channelBarY = int(ts_y + chanSelectOffset) + i*(channelBarHeight); //iterate through bar locations
-            channelBars[activeChan].resize(int(ts_x), channelBarY, int(ts_w), channelBarHeight); //bar x, bar y, bar w, bar h
+        int barIndex = 0;
+        for(int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) continue;
+            int channelBarY = int(ts_y) + barIndex * channelBarHeight;
+            channelBars[i].resize(int(ts_x), channelBarY, int(ts_w), channelBarHeight);
+            barIndex++;
         }
         
         if (currentBoard instanceof ADS1299SettingsBoard) {
@@ -370,20 +355,19 @@ class W_timeSeries extends Widget {
 
     void mousePressed() {
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-        tsChanSelect.mousePressed(this.dropdownIsActive); //Calls channel select mousePressed and checks if clicked
 
-        for(int i = 0; i < tsChanSelect.activeChan.size(); i++) {
-            int activeChan = tsChanSelect.activeChan.get(i);
-            channelBars[activeChan].mousePressed();
+        for(int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) continue;
+            channelBars[i].mousePressed();
         }
     }
     
     void mouseReleased() {
         super.mouseReleased(); //calls the parent mouseReleased() method of Widget (DON'T REMOVE)
 
-        for(int i = 0; i < tsChanSelect.activeChan.size(); i++) {
-            int activeChan = tsChanSelect.activeChan.get(i);
-            channelBars[activeChan].mouseReleased();
+        for(int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && !channelVisibility[i]) continue;
+            channelBars[i].mouseReleased();
         }
     }
 
@@ -830,9 +814,14 @@ class ChannelBar {
     }
 
     private boolean isBottomChannel() {
-        int numActiveChannels = w_timeSeries.tsChanSelect.activeChan.size();
-        boolean isLastChannel = channelIndex ==  w_timeSeries.tsChanSelect.activeChan.get(numActiveChannels - 1);
-        return isLastChannel;
+        // Find the last visible channel
+        int lastVisible = -1;
+        for (int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && channelVisibility[i]) {
+                lastVisible = i;
+            }
+        }
+        return channelIndex == lastVisible;
     }
 
     public void mousePressed() {

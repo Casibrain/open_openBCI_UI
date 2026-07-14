@@ -21,18 +21,11 @@ class W_emg extends Widget {
     private final int EMG_SETTINGS_BUTTON_WIDTH = 125;
     private List<controlP5.Controller> cp5ElementsToCheck;
 
-    public ChannelSelect emgChannelSelect;
-
     W_emg (PApplet _parent) {
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
         parent = _parent;
 
         cp5ElementsToCheck = new ArrayList<controlP5.Controller>();
-
-        //Add channel select dropdown to this widget
-        emgChannelSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "EMG_Channels");
-        emgChannelSelect.activateAllButtons();
-        cp5ElementsToCheck.addAll(emgChannelSelect.getCp5ElementsForOverlapCheck());
 
         emgCp5 = new ControlP5(ourApplet);
         emgCp5.setGraphics(ourApplet, 0,0);
@@ -45,17 +38,6 @@ class W_emg extends Widget {
     public void update() {
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
         lockElementsOnOverlapCheck(cp5ElementsToCheck);
-
-        //Update channel checkboxes and active channels
-        emgChannelSelect.update(x, y, w);
-        
-        /*
-        //Flex the Gplot graph when channel select dropdown is open/closed
-        if (bpChanSelect.isVisible() != prevChanSelectIsVisible) {
-            flexGPlotSizeAndPosition();
-            prevChanSelectIsVisible = bpChanSelect.isVisible();
-        }
-        */
     }
 
     public void draw() {
@@ -64,35 +46,37 @@ class W_emg extends Widget {
         drawEmgVisualizations();
 
         emgCp5.draw();
-
-        //Draw channel select dropdown
-        emgChannelSelect.draw();
     }
 
     public void screenResized() {
         super.screenResized(); //calls the parent screenResized() method of Widget (DON'T REMOVE)
         emgCp5.setGraphics(ourApplet, 0, 0);
         emgSettingsButton.setPosition(x0 + w - EMG_SETTINGS_BUTTON_WIDTH - 2, y0 + navH + 1);
-        emgChannelSelect.screenResized(pApplet);
     }
 
     public void mousePressed() {
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-        //Calls channel select mousePressed and checks if clicked
-        emgChannelSelect.mousePressed(this.dropdownIsActive);
     }
 
     private void drawEmgVisualizations() {
         pushStyle();
 
         float rx = x, ry = y, rw = w, rh = h;
-        //Flex the EMG graph when channel select dropdown is open/closed
-        ry = emgChannelSelect.isVisible() ? y + emgChannelSelect.getHeight() : y;
-        rh = emgChannelSelect.isVisible() ? h - emgChannelSelect.getHeight() : h;
         float scaleFactor = 1.0;
         float scaleFactorJaw = 1.5;
         int rowCount = 4;
-        int columnCount = ceil(emgChannelSelect.activeChan.size() / (rowCount * 1f));
+
+        // Count visible channels from global visibility
+        ArrayList<Integer> visibleChans = new ArrayList<Integer>();
+        for (int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && channelVisibility[i]) {
+                visibleChans.add(i);
+            }
+        }
+        int visibleCount = visibleChans.size();
+        if (visibleCount == 0) { popStyle(); return; }
+
+        int columnCount = ceil(visibleCount / (rowCount * 1f));
         float rowOffset = rh / rowCount;
         float colOffset = rw / columnCount;
         float currentX, currentY;
@@ -105,18 +89,18 @@ class W_emg extends Widget {
 
                 int index = i * columnCount + j;
 
-                if (index > emgChannelSelect.activeChan.size() - 1) {
+                if (index >= visibleCount) {
                     continue;
                 }
                 
-                channel = emgChannelSelect.activeChan.get(index);
+                channel = visibleChans.get(index);
 
                 int colorIndex = channel % 8;
 
                 pushMatrix();
 
                 currentX = rx + j * colOffset;
-                currentY = ry + i * rowOffset; //never name variables on an empty stomach
+                currentY = ry + i * rowOffset;
                 translate(currentX, currentY);
 
                 //realtime

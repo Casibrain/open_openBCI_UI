@@ -331,14 +331,12 @@ class SessionSettings {
         JSONObject saveTSSettings = new JSONObject();
         saveTSSettings.setInt("Time Series Vert Scale", w_timeSeries.getTSVertScale().getIndex());
         saveTSSettings.setInt("Time Series Horiz Scale", w_timeSeries.getTSHorizScale().getIndex());
-        //Save data from the Active channel checkBoxes
-        JSONArray saveActiveChanTS = new JSONArray();
-        int numActiveTSChan = w_timeSeries.tsChanSelect.activeChan.size();
-        for (int i = 0; i < numActiveTSChan; i++) {
-            int activeChan = w_timeSeries.tsChanSelect.activeChan.get(i);
-            saveActiveChanTS.setInt(i, activeChan);
+        //Save global channel visibility
+        JSONArray saveChanVisibility = new JSONArray();
+        for (int i = 0; i < min(nchan, channelVisibility.length); i++) {
+            saveChanVisibility.setBoolean(i, channelVisibility[i]);
         }
-        saveTSSettings.setJSONArray("activeChannels", saveActiveChanTS);
+        saveTSSettings.setJSONArray("channelVisibility", saveChanVisibility);
         saveSettingsJSONData.setJSONObject(kJSONKeyTimeSeries, saveTSSettings);
 
         //Make a second JSON object within our JSONArray to store Global settings for the GUI
@@ -432,36 +430,12 @@ class SessionSettings {
 
         ///////////////////////////////////////////////Setup new JSON object to save Band Power settings
         JSONObject saveBPSettings = new JSONObject();
-
-        //Save data from the Active channel checkBoxes
-        JSONArray saveActiveChanBP = new JSONArray();
-        int numActiveBPChan = w_bandPower.bpChanSelect.activeChan.size();
-        for (int i = 0; i < numActiveBPChan; i++) {
-            int activeChan = w_bandPower.bpChanSelect.activeChan.get(i);
-            saveActiveChanBP.setInt(i, activeChan);
-        }
-        saveBPSettings.setJSONArray("activeChannels", saveActiveChanBP);
+        // BandPower now uses global channelVisibility
         saveSettingsJSONData.setJSONObject(kJSONKeyBandPower, saveBPSettings);
 
         ///////////////////////////////////////////////Setup new JSON object to save Spectrogram settings
         JSONObject saveSpectrogramSettings = new JSONObject();
-        //Save data from the Active channel checkBoxes - Top
-        JSONArray saveActiveChanSpectTop = new JSONArray();
-        int numActiveSpectChanTop = w_spectrogram.spectChanSelectTop.activeChan.size();
-        for (int i = 0; i < numActiveSpectChanTop; i++) {
-            int activeChan = w_spectrogram.spectChanSelectTop.activeChan.get(i);
-            saveActiveChanSpectTop.setInt(i, activeChan);
-        }
-        saveSpectrogramSettings.setJSONArray("activeChannelsTop", saveActiveChanSpectTop);
-        //Save data from the Active channel checkBoxes - Bottom
-        JSONArray saveActiveChanSpectBot = new JSONArray();
-        int numActiveSpectChanBot = w_spectrogram.spectChanSelectBot.activeChan.size();
-        for (int i = 0; i < numActiveSpectChanBot; i++) {
-            int activeChan = w_spectrogram.spectChanSelectBot.activeChan.get(i);
-            saveActiveChanSpectBot.setInt(i, activeChan);
-        }
-        saveSpectrogramSettings.setJSONArray("activeChannelsBot", saveActiveChanSpectBot);
-        //Save Spectrogram_Max Freq Setting. The max frq variable is updated every time the user selects a dropdown in the spectrogram widget
+        // Spectrogram now uses global channelVisibility
         saveSpectrogramSettings.setInt("Spectrogram_Max Freq", spectMaxFrqSave);
         saveSpectrogramSettings.setInt("Spectrogram_Sample Rate", spectSampleRateSave);
         saveSpectrogramSettings.setInt("Spectrogram_LogLin", spectLogLinSave);
@@ -469,15 +443,7 @@ class SessionSettings {
 
         ///////////////////////////////////////////////Setup new JSON object to save EMG Settings
         JSONObject saveEMGSettings = new JSONObject();
-
-        //Save data from the Active channel checkBoxes
-        JSONArray saveActiveChanEMG = new JSONArray();
-        int numActiveEMGChan = w_emg.emgChannelSelect.activeChan.size();
-        for (int i = 0; i < numActiveEMGChan; i++) {
-            int activeChan = w_emg.emgChannelSelect.activeChan.get(i);
-            saveActiveChanEMG.setInt(i, activeChan);
-        }
-        saveEMGSettings.setJSONArray("activeChannels", saveActiveChanEMG);
+        // EMG now uses global channelVisibility
         saveSettingsJSONData.setJSONObject(kJSONKeyEmg, saveEMGSettings);
 
         ///////////////////////////////////////////////Setup new JSON object to save EMG Joystick Settings
@@ -813,16 +779,8 @@ class SessionSettings {
         w_headPlot.headPlot.setPositionSize(w_headPlot.headPlot.hp_x, w_headPlot.headPlot.hp_y, w_headPlot.headPlot.hp_w, w_headPlot.headPlot.hp_h, w_headPlot.headPlot.hp_win_x, w_headPlot.headPlot.hp_win_y);
 
         ////////////////////////////Apply Band Power settings
-        try {
-            //apply channel checkbox settings
-            w_bandPower.bpChanSelect.deactivateAllButtons();;
-            for (int i = 0; i < loadBPActiveChans.size(); i++) {
-                w_bandPower.bpChanSelect.setToggleState(loadBPActiveChans.get(i), true);
-            }
-        } catch (Exception e) {
-            println("Settings: Exception caught applying band power settings " + e);
-        }
-        verbosePrint("Settings: Band Power Active Channels: " + loadBPActiveChans);
+        // BandPower now uses global channelVisibility
+        verbosePrint("Settings: Band Power uses global channel visibility");
 
         ////////////////////////////Apply Spectrogram settings
         //Apply Max Freq dropdown
@@ -832,20 +790,8 @@ class SessionSettings {
             w_spectrogram.cp5_widget.getController("SpectrogramSampleRate").getCaptionLabel().setText(spectSampleRateArray[spectSampleRateLoad]);
         SpectrogramLogLin(spectLogLinLoad);
             w_spectrogram.cp5_widget.getController("SpectrogramLogLin").getCaptionLabel().setText(fftLogLinArray[spectLogLinLoad]);
-        try {
-            //apply channel checkbox settings
-            w_spectrogram.spectChanSelectTop.deactivateAllButtons();
-            w_spectrogram.spectChanSelectBot.deactivateAllButtons();
-            for (int i = 0; i < loadSpectActiveChanTop.size(); i++) {
-                w_spectrogram.spectChanSelectTop.setToggleState(loadSpectActiveChanTop.get(i), true);
-            }
-            for (int i = 0; i < loadSpectActiveChanBot.size(); i++) {
-                w_spectrogram.spectChanSelectBot.setToggleState(loadSpectActiveChanBot.get(i), true);
-            }
-        } catch (Exception e) {
-            println("Settings: Exception caught applying spectrogram settings channel bar " + e);
-        }
-        println("Settings: Spectrogram Active Channels: TOP - " + loadSpectActiveChanTop + " || BOT - " + loadSpectActiveChanBot);
+        // Spectrogram now uses global channelVisibility
+        println("Settings: Spectrogram uses global channel visibility");
 
         ///////////Apply Networking Settings
         //Update protocol with loaded value
@@ -926,16 +872,8 @@ class SessionSettings {
         }//end switch-case for networking settings for all networking protocols
 
         ////////////////////////////Apply EMG widget settings
-        try {
-            //apply channel checkbox settings
-            w_emg.emgChannelSelect.deactivateAllButtons();;
-            for (int i = 0; i < loadEmgActiveChannels.size(); i++) {
-                w_emg.emgChannelSelect.setToggleState(loadEmgActiveChannels.get(i), true);
-            }
-        } catch (Exception e) {
-            println("Settings: Exception caught applying EMG widget settings " + e);
-        }
-        verbosePrint("Settings: EMG Widget Active Channels: " + loadEmgActiveChannels);
+        // EMG now uses global channelVisibility
+        verbosePrint("Settings: EMG uses global channel visibility");
 
         ////////////////////////////Apply EMG Joystick settings
         w_emgJoystick.setJoystickSmoothing(loadEmgJoystickSmoothing);
@@ -970,16 +908,15 @@ class SessionSettings {
         w_timeSeries.setTSHorizScale(loadTimeSeriesSettings.getInt("Time Series Horiz Scale"));
         w_timeSeries.cp5_widget.getController("Duration").getCaptionLabel().setText(w_timeSeries.getTSHorizScale().getString());
 
-        JSONArray loadTSChan = loadTimeSeriesSettings.getJSONArray("activeChannels");
-        w_timeSeries.tsChanSelect.deactivateAllButtons();
+        // Load global channel visibility
         try {
-            for (int i = 0; i < loadTSChan.size(); i++) {
-                w_timeSeries.tsChanSelect.setToggleState(loadTSChan.getInt(i), true);
+            JSONArray loadChanVis = loadTimeSeriesSettings.getJSONArray("channelVisibility");
+            for (int i = 0; i < min(loadChanVis.size(), channelVisibility.length); i++) {
+                channelVisibility[i] = loadChanVis.getBoolean(i);
             }
         } catch (Exception e) {
-            println("Settings: Exception caught applying time series settings " + e);
+            println("Settings: No channelVisibility in settings, using defaults");
         }
-        verbosePrint("Settings: Time Series Active Channels: " + loadBPActiveChans);
             
     } //end loadApplyTimeSeriesSettings
 

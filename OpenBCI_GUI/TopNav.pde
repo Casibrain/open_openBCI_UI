@@ -1022,28 +1022,7 @@ class ChannelSelectorPopup extends JFrame implements MouseMotionListener, MouseL
     @Override public void mouseDragged(MouseEvent e) {}
 
     private void syncAllWidgetChannelSelects() {
-        if (w_timeSeries != null && w_timeSeries.tsChanSelect != null) {
-            w_timeSeries.tsChanSelect.syncWithGlobalVisibility();
-        }
-        if (w_fft != null && w_fft.fftChanSelect != null) {
-            w_fft.fftChanSelect.syncWithGlobalVisibility();
-        }
-        if (w_focus != null && w_focus.focusChanSelect != null) {
-            w_focus.focusChanSelect.syncWithGlobalVisibility();
-        }
-        if (w_bandPower != null && w_bandPower.bpChanSelect != null) {
-            w_bandPower.bpChanSelect.syncWithGlobalVisibility();
-        }
-        if (w_emg != null && w_emg.emgChannelSelect != null) {
-            w_emg.emgChannelSelect.syncWithGlobalVisibility();
-        }
-        if (w_spectrogram != null) {
-            if (w_spectrogram.spectChanSelectTop != null) {
-                w_spectrogram.spectChanSelectTop.syncWithGlobalVisibility();
-            }
-            if (w_spectrogram.spectChanSelectBot != null) {
-                w_spectrogram.spectChanSelectBot.syncWithGlobalVisibility();
-            }
-        }
+        // Global channelVisibility is the single source of truth
+        // All widgets read from channelVisibility[] directly
     }
 }

@@ -25,10 +25,6 @@ class W_Focus extends Widget {
 
     //to see all core variables/methods of the Widget class, refer to Widget.pde
     //put your custom variables here...
-    //private ControlP5 focus_cp5;
-    //private Button widgetTemplateButton;
-    private ChannelSelect focusChanSelect;
-    private boolean prevChanSelectIsVisible = false;
     private AuditoryNeurofeedback auditoryNeurofeedback;
 
 
@@ -70,11 +66,6 @@ class W_Focus extends Widget {
 
     W_Focus(PApplet _parent) {
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
-
-         //Add channel select dropdown to this widget
-        focusChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "FocusChannelSelect");
-        focusChanSelect.activateAllButtons();
-        cp5ElementsToCheck.addAll(focusChanSelect.getCp5ElementsForOverlapCheck());
 
         auditoryNeurofeedback = new AuditoryNeurofeedback(x + PAD_FIVE, y + PAD_FIVE, w/2 - PAD_FIVE*2, navBarHeight/2);
         cp5ElementsToCheck.add((controlP5.Controller)auditoryNeurofeedback.startStopButton);
@@ -121,15 +112,6 @@ class W_Focus extends Widget {
     public void update() {
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
 
-        //Update channel checkboxes and active channels
-        focusChanSelect.update(x, y, w);
-
-        //Flex the Gplot graph when channel select dropdown is open/closed
-        if (focusChanSelect.isVisible() != prevChanSelectIsVisible) {
-            channelSelectFlexWidgetUI();
-            prevChanSelectIsVisible = focusChanSelect.isVisible();
-        }
-
         if (currentBoard.isStreaming()) {
             dataGrid.setString(df.format(metricPrediction), 0, 1);
             focusBar.update(metricPrediction);
@@ -166,27 +148,16 @@ class W_Focus extends Widget {
         
         //Draw the graph
         focusBar.draw();
-
-        focusChanSelect.draw();
     }
 
     public void screenResized() {
         super.screenResized(); //calls the parent screenResized() method of Widget (DON'T REMOVE)
 
-        //Very important to allow users to interact with objects after app resize        
-        //focus_cp5.setGraphics(ourApplet, 0, 0);
-
         resizeTable();
-
-        //We need to set the position of our Cp5 object after the screen is resized
-        //widgetTemplateButton.setPosition(x + w/2 - widgetTemplateButton.getWidth()/2, y + h/2 - widgetTemplateButton.getHeight()/2);
-
         updateStatusCircle();
         updateAuditoryNeurofeedbackPosition();
-
         updateGraphDims();
         focusBar.screenResized(graphX, graphY, graphW, graphH);
-        focusChanSelect.screenResized(pApplet);
 
         //Custom resize these dropdowns due to longer text strings as options
         cp5_widget.get(ScrollableList.class, "focusMetricDropdown").setWidth(METRIC_DROPDOWN_W);
@@ -203,18 +174,14 @@ class W_Focus extends Widget {
 
     void mousePressed() {
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-        focusChanSelect.mousePressed(this.dropdownIsActive); //Calls channel select mousePressed and checks if clicked
     }
 
     private void resizeTable() {
-        int extraPadding = focusChanSelect.isVisible() ? navHeight : 0;
         float upperLeftContainerW = w/2;
         float upperLeftContainerH = h/2;
-        //float min = min(upperLeftContainerW, upperLeftContainerH);
         int tx = x + int(upperLeftContainerW);
-        int ty = y + PAD_FIVE + extraPadding;
+        int ty = y + PAD_FIVE;
         int tw = int(upperLeftContainerW) - PAD_FIVE*2;
-        //tableHeight = tw;
         dataGrid.setDim(tx, ty, tw);
         dataGrid.setTableHeight(int(upperLeftContainerH - PAD_FIVE*2));
         dataGrid.dynamicallySetTextVerticalPadding(0, 0);
@@ -222,9 +189,8 @@ class W_Focus extends Widget {
     }
 
     private void updateAuditoryNeurofeedbackPosition() {
-        int extraPadding = focusChanSelect.isVisible() ? navHeight : 0;
         int subContainerMiddleX = x + w/4;
-        auditoryNeurofeedback.screenResized(subContainerMiddleX, (int)(y + h/2 - navHeight + extraPadding), w/2 - PAD_FIVE*2, navBarHeight/2);
+        auditoryNeurofeedback.screenResized(subContainerMiddleX, (int)(y + h/2 - navHeight), w/2 - PAD_FIVE*2, navBarHeight/2);
     }
 
     private void updateStatusCircle() {
@@ -252,7 +218,7 @@ class W_Focus extends Widget {
             // getData in GUI returns data in shape ndatapoints x nchannels, in BrainFlow its transposed
             List<double[]> currentData = currentBoard.getData(windowSize);
 
-            if (currentData.size() != windowSize || focusChanSelect.activeChan.size() <= 0) {
+            if (currentData.size() != windowSize) {
                 return -1.0;
             }
 
@@ -263,10 +229,18 @@ class W_Focus extends Widget {
                 }
             }
 
+            // Build list of visible channels from global visibility
+            ArrayList<Integer> visibleChannels = new ArrayList<Integer>();
+            for (int i = 0; i < channelCount; i++) {
+                if (channelVisibility != null && i < channelVisibility.length && channelVisibility[i]) {
+                    visibleChannels.add(i);
+                }
+            }
+            if (visibleChannels.size() <= 0) {
+                return -1.0;
+            }
             int[] channelsInDataArray = ArrayUtils.toPrimitive(
-                    focusChanSelect.activeChan.toArray(
-                        new Integer[focusChanSelect.activeChan.size()]
-                    ));
+                    visibleChannels.toArray(new Integer[visibleChannels.size()]));
 
             //Full Source Code for this method: https://github.com/brainflow-dev/brainflow/blob/c5f0ad86683e6eab556e30965befb7c93e389a3b/src/data_handler/data_handler.cpp#L1115
             Pair<double[], double[]> bands = DataFilter.get_avg_band_powers (dataArray, channelsInDataArray, currentBoard.getSampleRate(), true);
@@ -383,14 +357,6 @@ class W_Focus extends Widget {
                 cPanel = #f5f5f5;   //little grey
                 break;
         }
-    }
-
-    void channelSelectFlexWidgetUI() {
-        focusBar.setPlotPosAndOuterDim(focusChanSelect.isVisible());
-        int factor = focusChanSelect.isVisible() ? 1 : -1;
-        yc += navHeight * factor;
-        resizeTable();
-        updateAuditoryNeurofeedbackPosition();
     }
 
     public void setFocusHorizScale(int n) {

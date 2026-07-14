@@ -27,19 +27,12 @@ class W_BandPower extends Widget {
     private float[] normalizedBandPowers = new float[NUM_BANDS];
 
     private GPlot bp_plot;
-    public ChannelSelect bpChanSelect;
-    private boolean prevChanSelectIsVisible = false;
 
     private List<controlP5.Controller> cp5ElementsToCheck = new ArrayList<controlP5.Controller>();
 
     W_BandPower(PApplet _parent) {
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
 
-        //Add channel select dropdown to this widget
-        bpChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "BP_Channels");
-        bpChanSelect.activateAllButtons();
-        cp5ElementsToCheck.addAll(bpChanSelect.getCp5ElementsForOverlapCheck());
-        
         //Add settings dropdowns
         addDropdown("Smoothing", "Smooth", Arrays.asList(settings.fftSmoothingArray), smoothFac_ind); //smoothFac_ind is a global variable at the top of W_HeadPlot.pde
         addDropdown("UnfiltFilt", "Filters?", Arrays.asList(settings.fftFilterArray), settings.fftFilterSave);
@@ -88,15 +81,6 @@ class W_BandPower extends Widget {
 
     public void update() {
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
-        
-        //Update channel checkboxes and active channels
-        bpChanSelect.update(x, y, w);
-        
-        //Flex the Gplot graph when channel select dropdown is open/closed
-        if (bpChanSelect.isVisible() != prevChanSelectIsVisible) {
-            flexGPlotSizeAndPosition();
-            prevChanSelectIsVisible = bpChanSelect.isVisible();
-        }
 
         GPointsArray bp_points = new GPointsArray(dataProcessing.headWidePower.length);
         bp_points.add(DELTA + 0.5, activePower[DELTA], "DELTA\n0.5-4Hz");
@@ -106,9 +90,7 @@ class W_BandPower extends Widget {
         bp_points.add(GAMMA + 0.5, activePower[GAMMA], "GAMMA\n32-100Hz");
         bp_plot.setPoints(bp_points);
 
-        if (bpChanSelect.isVisible()) {
-            lockElementsOnOverlapCheck(cp5ElementsToCheck);
-        }
+        lockElementsOnOverlapCheck(cp5ElementsToCheck);
     }
 
     public void draw() {
@@ -131,30 +113,21 @@ class W_BandPower extends Widget {
         rect(x, y - navHeight, w, navHeight); //button bar
 
         popStyle();
-        bpChanSelect.draw();
     }
 
     public void screenResized() {
         super.screenResized(); //calls the parent screenResized() method of Widget (DON'T REMOVE)
 
         flexGPlotSizeAndPosition();
-
-        bpChanSelect.screenResized(pApplet);
     }
 
     public void mousePressed() {
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-        bpChanSelect.mousePressed(this.dropdownIsActive); //Calls channel select mousePressed and checks if clicked
     }
 
     void flexGPlotSizeAndPosition() {
-        if (bpChanSelect.isVisible()) {
-            bp_plot.setPos(x, y + bpChanSelect.getHeight() - navH);
-            bp_plot.setOuterDim(w, h - bpChanSelect.getHeight() + navH);
-        } else {
-            bp_plot.setPos(x, y - navH);
-            bp_plot.setOuterDim(w, h + navH);
-        }
+        bp_plot.setPos(x, y - navH);
+        bp_plot.setOuterDim(w, h + navH);
     }
 
     public float[] getNormalizedBPSelectedChannels() {
@@ -164,22 +137,24 @@ class W_BandPower extends Widget {
     //Called in DataProcessing.pde to update data even if widget is closed
     public void updateBandPowerWidgetData() {
         float normalizingSum = 0;
+        int visibleCount = 0;
 
         for (int i = 0; i < NUM_BANDS; i++) {
             float sum = 0;
 
-            for (int j = 0; j < bpChanSelect.activeChan.size(); j++) {
-                int chan = bpChanSelect.activeChan.get(j);
-                sum += dataProcessing.avgPowerInBins[chan][i];
+            for (int j = 0; j < nchan; j++) {
+                if (channelVisibility != null && j < channelVisibility.length && !channelVisibility[j]) continue;
+                sum += dataProcessing.avgPowerInBins[j][i];
+                visibleCount++;
             }
 
-            activePower[i] = sum / bpChanSelect.activeChan.size();
+            activePower[i] = visibleCount > 0 ? sum / visibleCount : 0;
 
             normalizingSum += activePower[i];
         }
 
         for (int i = 0; i < NUM_BANDS; i++) {
-            normalizedBandPowers[i] = activePower[i] / normalizingSum;
+            normalizedBandPowers[i] = normalizingSum > 0 ? activePower[i] / normalizingSum : 0;
         }
     }
 };

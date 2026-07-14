@@ -13,11 +13,8 @@
 
 class W_fft extends Widget {
 
-    public ChannelSelect fftChanSelect;
-    boolean prevChanSelectIsVisible = false;
-
     GPlot fft_plot; //create an fft plot for each active channel
-    GPointsArray[] fft_points;  //create an array of points for each channel of data (4, 8, or 16)
+    GPointsArray[] fft_points;  //create an array of points for each channel of data
     
     int[] lineColor = {
         (int)color(129, 129, 129),
@@ -50,11 +47,6 @@ class W_fft extends Widget {
 
     W_fft(PApplet _parent){
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
-
-        //Add channel select dropdown to this widget
-        fftChanSelect = new ChannelSelect(pApplet, this, x, y, w, navH, "BP_Channels");
-        fftChanSelect.activateAllButtons();
-        cp5ElementsToCheck.addAll(fftChanSelect.getCp5ElementsForOverlapCheck());
 
         //Default FFT plot settings
         settings.fftMaxFrqSave = 2;
@@ -132,18 +124,8 @@ class W_fft extends Widget {
             }
         }
 
-        //Update channel select checkboxes and active channels
-        fftChanSelect.update(x, y, w);
-
-        //Flex the Gplot graph when channel select dropdown is open/closed
-        if (fftChanSelect.isVisible() != prevChanSelectIsVisible) {
-            flexGPlotSizeAndPosition();
-            prevChanSelectIsVisible = fftChanSelect.isVisible();
-        }
-
-        if (fftChanSelect.isVisible()) {
-            lockElementsOnOverlapCheck(cp5ElementsToCheck);
-        }
+        //Use global channel visibility
+        lockElementsOnOverlapCheck(cp5ElementsToCheck);
     }
 
     void draw(){
@@ -160,12 +142,12 @@ class W_fft extends Widget {
         fft_plot.drawXAxis();
         fft_plot.drawYAxis();
         fft_plot.drawGridLines(GPlot.BOTH);
-        //Update and draw active channels that have been selected via channel select for this widget
-        for (int j = 0; j < fftChanSelect.activeChan.size(); j++) {
-            int chan = fftChanSelect.activeChan.get(j);
-            fft_plot.setLineColor(lineColor[chan % lineColor.length]);
+        //Update and draw active channels based on global visibility
+        for (int j = 0; j < nchan; j++) {
+            if (channelVisibility != null && j < channelVisibility.length && !channelVisibility[j]) continue;
+            fft_plot.setLineColor(lineColor[j % lineColor.length]);
             //remap fft point arrays to fft plots
-            fft_plot.setPoints(fft_points[chan]);
+            fft_plot.setPoints(fft_points[j]);
             fft_plot.drawLines();
         }  
         fft_plot.endDraw();
@@ -175,8 +157,6 @@ class W_fft extends Widget {
         rect(x, y - navHeight, w, navHeight); //button bar
 
         popStyle();
-
-        fftChanSelect.draw();
     }
 
     void screenResized(){
@@ -185,27 +165,14 @@ class W_fft extends Widget {
         //update position/size of FFT plot
         fft_plot.setPos(x, y-navHeight);//update position
         fft_plot.setOuterDim(w, h+navHeight);//update dimensions
-
-        fftChanSelect.screenResized(pApplet);
     }
 
     void mousePressed(){
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-        fftChanSelect.mousePressed(this.dropdownIsActive); //Calls channel select mousePressed and checks if clicked
     }
 
     void mouseReleased(){
         super.mouseReleased(); //calls the parent mouseReleased() method of Widget (DON'T REMOVE)
-    }
-
-    void flexGPlotSizeAndPosition() {
-        if (fftChanSelect.isVisible()) {
-                fft_plot.setPos(x, y);
-                fft_plot.setOuterDim(w, h);
-        } else {
-            fft_plot.setPos(x, y - navHeight);
-            fft_plot.setOuterDim(w, h + navHeight);
-        }
     }
 };
 

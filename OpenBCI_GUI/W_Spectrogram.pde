@@ -10,10 +10,6 @@
 
 class W_Spectrogram extends Widget {
 
-    //to see all core variables/methods of the Widget class, refer to Widget.pde
-    public ChannelSelect spectChanSelectTop;
-    public ChannelSelect spectChanSelectBot;
-    private boolean chanSelectWasOpen = false;
     List<controlP5.Controller> cp5ElementsToCheck = new ArrayList<controlP5.Controller>();
 
     int xPos = 0;
@@ -67,16 +63,6 @@ class W_Spectrogram extends Widget {
     W_Spectrogram(PApplet _parent){
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
 
-        //Add channel select dropdown to this widget
-        spectChanSelectTop = new ChannelSelect(pApplet, this, x, y, w, navH, "Spectrogram_Channels_Top");
-        spectChanSelectBot = new ChannelSelect(pApplet, this, x, y + navH, w, navH, "Spectrogram_Channels_Bot");
-        activateDefaultChannels();
-        spectChanSelectTop.setIsDualChannelSelect(true);
-        spectChanSelectBot.setIsDualChannelSelect(true);
-        spectChanSelectBot.setIsFirstRowChannelSelect(false);
-        cp5ElementsToCheck.addAll(spectChanSelectTop.getCp5ElementsForOverlapCheck());
-        cp5ElementsToCheck.addAll(spectChanSelectBot.getCp5ElementsForOverlapCheck());
-
         xPos = w - 1; //draw on the right, and shift pixels to the left
         prevW = w;
         prevH = h;
@@ -110,20 +96,7 @@ class W_Spectrogram extends Widget {
     void update(){
         super.update(); //calls the parent update() method of Widget (DON'T REMOVE)
 
-        //Update channel checkboxes and active channels
-        spectChanSelectTop.update(x, y, w);
-        spectChanSelectBot.update(x, y + navH, w);
-        //Let the top channel select open the bottom one also so we can open both with 1 button
-        if (chanSelectWasOpen != spectChanSelectTop.isVisible()) {
-            spectChanSelectBot.setIsVisible(spectChanSelectTop.isVisible());
-            chanSelectWasOpen = spectChanSelectTop.isVisible();
-            //Allow spectrogram to flex size and position depending on if the channel select is open
-            flexSpectrogramSizeAndPosition();
-        }
-
-        if (spectChanSelectTop.isVisible()) {
-            lockElementsOnOverlapCheck(cp5ElementsToCheck);
-        }
+        lockElementsOnOverlapCheck(cp5ElementsToCheck);
         
         if (currentBoard.isStreaming()) {
             //Make sure we are always draw new pixels on the right
@@ -183,17 +156,14 @@ class W_Spectrogram extends Widget {
             }
             //for (int i = 0; i < fftLin_L.specSize() - 80; i++) {
             for (int i = 0; i <= dataImg.height/2; i++) {
-                //LEFT SPECTROGRAM ON TOP
-                float hueValue = hueLimit - map((fftAvgs(spectChanSelectTop.activeChan, i)*32), 0, 256, 0, hueLimit);
+                //LEFT SPECTROGRAM ON TOP - use first half of visible channels
+                ArrayList<Integer> topChans = getVisibleChannelsTop();
+                float hueValue = hueLimit - map((fftAvgs(topChans, i)*32), 0, 256, 0, hueLimit);
                 if (settings.spectLogLinSave == 0) {
                     hueValue = map(log10(hueValue), 0, 2, 0, hueLimit);
                 }
-                // colorMode is HSB, the range for hue is 256, for saturation is 100, brightness is 100.
                 colorMode(HSB, 256, 100, 100);
-                // color for stroke is specified as hue, saturation, brightness.
                 stroke(int(hueValue), 100, 80);
-                // plot a point using the specified stroke
-                //point(xPos, i);
                 int loc = xPos + ((dataImg.height/2 - i) * dataImg.width);
                 if (loc >= dataImg.width * dataImg.height) loc = dataImg.width * dataImg.height - 1;
                 try {
@@ -202,17 +172,15 @@ class W_Spectrogram extends Widget {
                     println("Major drawing error Spectrogram Left image!");
                 }
 
-                //RIGHT SPECTROGRAM ON BOTTOM
-                hueValue = hueLimit - map((fftAvgs(spectChanSelectBot.activeChan, i)*32), 0, 256, 0, hueLimit);
+                //RIGHT SPECTROGRAM ON BOTTOM - use second half of visible channels
+                ArrayList<Integer> botChans = getVisibleChannelsBot();
+                hueValue = hueLimit - map((fftAvgs(botChans, i)*32), 0, 256, 0, hueLimit);
                 if (settings.spectLogLinSave == 0) {
                     hueValue = map(log10(hueValue), 0, 2, 0, hueLimit);
                 }
-                // colorMode is HSB, the range for hue is 256, for saturation is 100, brightness is 100.
                 colorMode(HSB, 256, 100, 100);
-                // color for stroke is specified as hue, saturation, brightness.
                 stroke(int(hueValue), 100, 80);
                 int y_offset = -1;
-                // Pixel = X + ((Y + Height/2) * Width)
                 loc = xPos + ((i + dataImg.height/2 + y_offset) * dataImg.width);
                 if (loc >= dataImg.width * dataImg.height) loc = dataImg.width * dataImg.height - 1;
                 try {
@@ -231,8 +199,6 @@ class W_Spectrogram extends Widget {
         image(dataImg, 0, 0);
         popMatrix();
 
-        spectChanSelectTop.draw();
-        spectChanSelectBot.draw();
         drawAxes(scaleW, scaleH);
         drawCenterLine();
     }
@@ -240,24 +206,14 @@ class W_Spectrogram extends Widget {
     public void screenResized(){
         super.screenResized(); //calls the parent screenResized() method of Widget (DON'T REMOVE)
 
-        spectChanSelectTop.screenResized(pApplet);
-        spectChanSelectBot.screenResized(pApplet);  
         graphX = x + paddingLeft;
         graphY = y + paddingTop;
         graphW = w - paddingRight - paddingLeft;
         graphH = h - paddingBottom - paddingTop;
-        //Allow spectrogram to flex size and position depending on if the channel select is open
-        if (spectChanSelectTop.isVisible()) {
-            graphY += navH * 2;
-            graphH -= navH * 2;
-        }
     }
 
     void mousePressed(){
         super.mousePressed(); //calls the parent mousePressed() method of Widget (DON'T REMOVE)
-
-        spectChanSelectTop.mousePressed(this.dropdownIsActive); //Calls channel select mousePressed and checks if clicked
-        spectChanSelectBot.mousePressed(this.dropdownIsActive);
     }
 
     void mouseReleased(){
@@ -365,38 +321,43 @@ class W_Spectrogram extends Widget {
         popStyle();
     }
 
+    // Get first half of visible channels for top spectrogram
+    private ArrayList<Integer> getVisibleChannelsTop() {
+        ArrayList<Integer> all = getVisibleChannels();
+        ArrayList<Integer> top = new ArrayList<Integer>();
+        int half = all.size() / 2;
+        for (int i = 0; i < half; i++) top.add(all.get(i));
+        if (top.isEmpty() && all.size() > 0) top.add(all.get(0));
+        return top;
+    }
+
+    // Get second half of visible channels for bottom spectrogram
+    private ArrayList<Integer> getVisibleChannelsBot() {
+        ArrayList<Integer> all = getVisibleChannels();
+        ArrayList<Integer> bot = new ArrayList<Integer>();
+        int half = all.size() / 2;
+        for (int i = half; i < all.size(); i++) bot.add(all.get(i));
+        if (bot.isEmpty() && all.size() > 1) bot.add(all.get(1));
+        return bot;
+    }
+
+    // Get all visible channels from global visibility
+    private ArrayList<Integer> getVisibleChannels() {
+        ArrayList<Integer> visible = new ArrayList<Integer>();
+        for (int i = 0; i < nchan; i++) {
+            if (channelVisibility != null && i < channelVisibility.length && channelVisibility[i]) {
+                visible.add(i);
+            }
+        }
+        return visible;
+    }
+
     void activateDefaultChannels() {
-        int[] topChansToActivate;
-        int[] botChansToActivate; 
-        if (nchan == 4) {
-            topChansToActivate = new int[]{0, 2};
-            botChansToActivate = new int[]{1, 3};
-        } else if (nchan == 8) {
-            topChansToActivate = new int[]{0, 2, 4, 6};
-            botChansToActivate = new int[]{1, 3, 5, 7};
-        } else {
-            topChansToActivate = new int[]{0, 2, 4, 6, 8 ,10, 12, 14};
-            botChansToActivate = new int[]{1, 3, 5, 7, 9, 11, 13, 15};
-        }
-
-        for (int i = 0; i < topChansToActivate.length; i++) {
-            spectChanSelectTop.setToggleState(topChansToActivate[i], true);
-            
-        }
-
-        for (int i = 0; i < botChansToActivate.length; i++) {
-            spectChanSelectBot.setToggleState(botChansToActivate[i], true);
-        }
+        // Default channels now come from global visibility
     }
 
     void flexSpectrogramSizeAndPosition() {
-        if (spectChanSelectTop.isVisible()) {
-            graphY += navH * 2;
-            graphH -= navH * 2;
-        } else {
-            graphY -= navH * 2;
-            graphH += navH * 2;
-        }
+        // No longer needed - graph position is fixed
     }
 
     void setScrollSpeed(int i) {
