@@ -77,10 +77,12 @@ public enum CytonImpedanceLabels implements IndexingInterface
 
 public enum CytonImpedanceInterval implements IndexingInterface
 {
-    FOUR (0, 4000, "4 sec"),
-    FIVE (1, 5000, "5 sec"),
-    SEVEN (2, 7000, "7 sec"),
-    TEN (3, 10000, "10 sec")
+    ONE (0, 1000, "1 sec"),
+    TWO (1, 2000, "2 sec"),
+    FOUR (2, 4000, "4 sec"),
+    FIVE (3, 5000, "5 sec"),
+    SEVEN (4, 7000, "7 sec"),
+    TEN (5, 10000, "10 sec")
     ;
 
     private int index;

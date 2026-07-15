@@ -545,7 +545,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
             String cmd = String.format("z%c%c%cZ", chanChar, p, n);
 
             // Wait for board to finish sending buffered EEG data after 's' command
-            try { Thread.sleep(500); } catch (Exception e) {}
+            try { Thread.sleep(100); } catch (Exception e) {}
             // Flush any remaining EEG data from ring buffer
             while (ringAvailable() > 0) { ringRead(); }
 
