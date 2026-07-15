@@ -155,6 +155,23 @@ class W_CytonImpedance extends Widget {
             }
         }
         headPlotElectrodes.drawElectrodesWithColors(rgb, null);
+
+        // Highlight the electrode currently being tested with a green border
+        for (int i = 0; i < cytonElectrodeStatus.length && i < numE; i++) {
+            int ch = cytonElectrodeStatus[i].getGUIChannelNumber() - 1;
+            boolean checking = isDirectSerialBoard ?
+                ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceNorP(ch, false) :
+                ((BoardCyton)cytonBoard).isCheckingImpedanceNorP(ch, false);
+            if (checking) {
+                int[] pos = headPlotElectrodes.getPixelPos(i);
+                int d = headPlotElectrodes.getElecDiam();
+                noFill();
+                stroke(0, 255, 0);
+                strokeWeight(3);
+                ellipse(pos[0], pos[1], d + 6, d + 6);
+            }
+        }
+
         headPlotElectrodes.drawElectrodeNames(null);
 
         imp_buttons_cp5.draw();
