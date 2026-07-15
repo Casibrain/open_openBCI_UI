@@ -17,7 +17,7 @@ class SignalCheckThresholdUI {
         textColor = _textColor;
         defaultValue_Percentage = name.equals("errorThreshold") ? 90 : 75;
         valuePercentage = defaultValue_Percentage;
-        defaultValue_kOhms = name == "errorThreshold" ? 10000 : 5000;
+        defaultValue_kOhms = name == "errorThreshold" ? 10 : 5;
         valuekOhms = defaultValue_kOhms;
         thresholdTF = createTextfield(_cp5, _name, 0, _x, _y, _w, _h, _textColor);
         updateTextfieldModeChanged(_mode);
