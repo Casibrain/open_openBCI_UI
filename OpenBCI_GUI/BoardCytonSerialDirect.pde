@@ -651,8 +651,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
                 if (idx < resp.length()) {
                     nVal = resp.charAt(idx) & 0xFF;
                 }
-                // Board returns impedance in kOhms directly
-                data_elec_imp_ohm[chanIdx] = (float)Math.max(pVal, nVal);
+                // Board returns impedance in kOhms directly, use P pin value only
+                data_elec_imp_ohm[chanIdx] = (float)pVal;
                 println("BoardCytonSerialDirect: Impedance ch" + channel + " = " + data_elec_imp_ohm[chanIdx] + " ohms (p=" + pVal + ", n=" + nVal + ")");
             }
         } catch (Exception e) {
