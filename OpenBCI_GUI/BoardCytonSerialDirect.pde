@@ -568,10 +568,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
         }
     }
 
-    // Parse impedance response: channel(1-2 digits) + p(0-255) + n(0-255)
-    // Example: "450" = channel 4, p=5, n=0
+    // Parse impedance response: z<通道><p><n>Z
+    // Example: "z450Z" = channel 4, p=5, n=0
     private boolean waitForImpedanceResponse(int expectedChannel, long timeoutMs) {
         long start = System.currentTimeMillis();
+        boolean capturing = false;
         StringBuilder response = new StringBuilder();
         while ((System.currentTimeMillis() - start) < timeoutMs) {
             int b = ringRead();
@@ -580,28 +581,19 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
                 continue;
             }
             char c = (char) b;
-            if (c >= '0' && c <= '9') {
-                response.append(c);
-            } else if (c == '$') {
-                // Might be start of EOT
-                // Check for $$$
-                int dollarCount = 1;
-                long savedStart = System.currentTimeMillis();
-                while (dollarCount < 3 && (System.currentTimeMillis() - savedStart) < 100) {
-                    int nb = ringRead();
-                    if (nb < 0) { try { Thread.sleep(1); } catch (Exception e) {} continue; }
-                    if ((char)nb == '$') {
-                        dollarCount++;
-                    } else {
-                        break;
-                    }
-                }
-                // Parse accumulated response
+            if (c == 'z') {
+                // Start of impedance response
+                capturing = true;
+                response.setLength(0);
+            } else if (capturing && c == 'Z') {
+                // End of impedance response
+                capturing = false;
                 if (response.length() >= 3) {
                     parseImpedanceResponse(response.toString());
                     return true;
                 }
-                response.setLength(0);
+            } else if (capturing) {
+                response.append(c);
             }
         }
         return false;
