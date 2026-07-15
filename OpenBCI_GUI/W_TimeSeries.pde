@@ -598,7 +598,8 @@ class ChannelBar {
         }
 
         //update the impedance values
-        val = data_elec_imp_ohm[channelIndex]/1000;
+        // BoardCytonSerialDirect: board returns kOhm directly
+        val = (currentBoard instanceof BoardCytonSerialDirect) ? data_elec_imp_ohm[channelIndex] : data_elec_imp_ohm[channelIndex]/1000;
         fmt = String.format(getFmt(val),val) + " kOhm";
         if (is_railed != null && is_railed[channelIndex].is_railed == true) {
             fmt = "RAILED - " + fmt;

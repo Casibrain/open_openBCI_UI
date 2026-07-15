@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //------------------------------------------------------------------------
 //Used to check GUI version in TopNav.pde and displayed on the splash screen on startup
 String localGUIVersionString = "v6.0.0-beta.1";
-String localGUIVersionDate = "2026/07/14 17:35:19";
+String localGUIVersionDate = "2026/07/15 22:26:12";
 
 PApplet ourApplet;
 
@@ -461,6 +461,8 @@ void delayedSetup() {
     smooth(); //turn this off if it's too slow
 
     surface.setResizable(true);  //updated from frame.setResizable in Processing 2
+    // Maximize window on startup
+    surface.setSize(displayWidth, displayHeight);
     settings.widthOfLastScreen = width; //for screen resizing (Thank's Tao)
     settings.heightOfLastScreen = height;
 
