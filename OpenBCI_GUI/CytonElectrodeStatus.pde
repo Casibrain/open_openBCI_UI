@@ -271,7 +271,8 @@ class CytonElectrodeStatus {
         if (_isImpedanceMode && checkingImp2) {
             
             //update the impedance values
-            statusValue = data_elec_imp_ohm[i]/1000; //value in kOhm
+            // BoardCytonSerialDirect: board returns kOhm directly, no division needed
+            statusValue = isDirectSerialBoard ? data_elec_imp_ohm[i] : data_elec_imp_ohm[i]/1000;
             boolean greaterThanZero = statusValue > Double.MIN_NORMAL;
             color railedTextColor = OPENBCI_DARKBLUE;
             if (statusValue > impedanceYellowCuttoff) {

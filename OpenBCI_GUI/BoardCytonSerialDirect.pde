@@ -556,6 +556,12 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
             // Read impedance response from serial
             boolean gotResponse = waitForImpedanceResponse(channel, 5000);
             impedanceMode = false;
+
+            if (gotResponse && isN) {
+                isCheckingImpedanceN[channel] = true;
+            } else if (gotResponse && !isN) {
+                isCheckingImpedanceP[channel] = true;
+            }
             if (gotResponse) {
                 // Resume streaming
                 sendCommandRaw("b");
