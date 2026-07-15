@@ -268,7 +268,7 @@ class CytonElectrodeStatus {
         boolean checkingImp2 = isDirectSerialBoard ?
             ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceNorP(i, is_N_Pin) :
             ((BoardCyton)cytonBoard).isCheckingImpedanceNorP(i, is_N_Pin);
-        if (_isImpedanceMode && checkingImp2 && cytonBoard.isStreaming()) {
+        if (_isImpedanceMode && checkingImp2) {
             
             //update the impedance values
             statusValue = data_elec_imp_ohm[i]/1000; //value in kOhm
