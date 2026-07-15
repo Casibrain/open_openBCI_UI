@@ -82,6 +82,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
     // Impedance state per channel (N and P pins)
     private boolean[] isCheckingImpedanceN;
     private boolean[] isCheckingImpedanceP;
+    private volatile boolean impedanceMode = false; // pause ring buffer drain during impedance read
     private char[] channelSelectForSettings = {'1','2','3','4','5','6','7','8','Q','W','E','R','T','Y','U','I',
                                                '1','2','3','4','5','6','7','8','Q','W','E','R','T','Y','U','I'};
 
@@ -311,6 +312,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
 
     @Override
     public void updateInternal() {
+        // Skip ring buffer drain during impedance read to avoid data race
+        if (impedanceMode) return;
         // Always drain ring buffer to prevent overflow, regardless of streaming state
         while (ringAvailable() > 0) {
             int b = ringRead();
@@ -540,10 +543,19 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
             char p = isN ? '0' : '1';
             char n = isN ? '1' : '0';
             String cmd = String.format("z%c%c%cZ", chanChar, p, n);
+
+            // Wait for board to finish sending buffered EEG data after 's' command
+            try { Thread.sleep(500); } catch (Exception e) {}
+            // Flush any remaining EEG data from ring buffer
+            while (ringAvailable() > 0) { ringRead(); }
+
             sendCommandRaw(cmd);
 
+            // Pause main loop ring buffer drain to avoid data race
+            impedanceMode = true;
             // Read impedance response from serial
             boolean gotResponse = waitForImpedanceResponse(channel, 5000);
+            impedanceMode = false;
             if (gotResponse) {
                 // Resume streaming
                 sendCommandRaw("b");
@@ -574,6 +586,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
         long start = System.currentTimeMillis();
         boolean capturing = false;
         StringBuilder response = new StringBuilder();
+        StringBuilder rawLog = new StringBuilder();
         while ((System.currentTimeMillis() - start) < timeoutMs) {
             int b = ringRead();
             if (b < 0) {
@@ -581,6 +594,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
                 continue;
             }
             char c = (char) b;
+            rawLog.append(String.format("%02X ", b));
             if (c == 'z') {
                 // Start of impedance response
                 capturing = true;
@@ -588,6 +602,12 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
             } else if (capturing && c == 'Z') {
                 // End of impedance response
                 capturing = false;
+                // Log hex of captured content
+                StringBuilder capHex = new StringBuilder();
+                for (int i = 0; i < response.length(); i++) {
+                    capHex.append(String.format("%02X ", (int)(response.charAt(i) & 0xFF)));
+                }
+                println("BoardCytonSerialDirect: Impedance captured hex: " + capHex.toString().trim() + " | len=" + response.length());
                 if (response.length() >= 3) {
                     parseImpedanceResponse(response.toString());
                     return true;
@@ -596,40 +616,37 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, Imp
                 response.append(c);
             }
         }
+        println("BoardCytonSerialDirect: Impedance timeout, raw bytes: [" + rawLog.toString().trim() + "]");
         return false;
     }
 
-    // Parse response string like "450" into channel, p-value, n-value
+    // Parse impedance response: z<ch><p><n>Z where ch is ASCII digit, p and n are binary bytes (0-255)
     // Store result in data_elec_imp_ohm for widget display
     private void parseImpedanceResponse(String resp) {
         try {
-            // Response format: channel(1-2 digits) + p_value(0-255) + n_value(0-255)
-            // Minimal: 3 chars (1-digit channel + p + n)
+            // resp contains the characters between z and Z
+            // Channel is ASCII digit(s), p and n may be binary bytes
             if (resp.length() < 3) return;
             int idx = 0;
             int channel = 0;
-            // Parse channel number (1 or 2 digits)
+            // Parse channel number (1 or 2 ASCII digits)
             while (idx < resp.length() && resp.charAt(idx) >= '0' && resp.charAt(idx) <= '9' && idx < 2) {
                 channel = channel * 10 + (resp.charAt(idx) - '0');
                 idx++;
             }
             if (channel < 1 || channel > getNumEXGChannels()) return;
             int chanIdx = channel - 1;
-            // Parse p value
+            // Parse p value (binary byte)
             if (idx < resp.length()) {
-                int pVal = resp.charAt(idx) - '0';
+                int pVal = resp.charAt(idx) & 0xFF;
                 idx++;
-                // Parse n value
+                // Parse n value (binary byte)
                 int nVal = 0;
                 if (idx < resp.length()) {
-                    nVal = resp.charAt(idx) - '0';
+                    nVal = resp.charAt(idx) & 0xFF;
                 }
-                // Convert to ohms: value * 1000 (rough approximation, adjust based on board firmware)
-                // The firmware returns a raw value; convert to approximate ohms
-                double impP = pVal * 1000.0;
-                double impN = nVal * 1000.0;
-                // Store the higher of P and N as the channel impedance
-                data_elec_imp_ohm[chanIdx] = (float)Math.max(impP, impN);
+                // Board returns impedance in kOhms directly
+                data_elec_imp_ohm[chanIdx] = (float)Math.max(pVal, nVal);
                 println("BoardCytonSerialDirect: Impedance ch" + channel + " = " + data_elec_imp_ohm[chanIdx] + " ohms (p=" + pVal + ", n=" + nVal + ")");
             }
         } catch (Exception e) {
