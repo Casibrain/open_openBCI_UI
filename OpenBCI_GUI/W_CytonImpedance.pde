@@ -24,7 +24,7 @@ class W_CytonImpedance extends Widget {
     private final int padding = 5;
     private final int padding_3 = 3;
     private int numTableRows = 9;
-    private final int numTableColumns = 3;
+    private final int numTableColumns = 2;
     private final int tableWidth = 190;
     private int tableHeight = 0;
     private int cellHeight = 10;
@@ -96,8 +96,7 @@ class W_CytonImpedance extends Widget {
         dataGrid.setDrawTableBorder(true);
 
         //Set Column Labels
-        dataGrid.setString("N Status", 0, 1);
-        dataGrid.setString("P Status", 0, 2);
+        dataGrid.setString("Impedance", 0, 1);
 
         setTableElectrodeNames();
 
@@ -232,8 +231,7 @@ class W_CytonImpedance extends Widget {
         //final int thresholdTF_y = y + tableHeight + padding*2;
         RectDimensions dim = dataGrid.getCellDims(numTableRows - 1, 1);
         warningThreshold.setPosition(dim.x, dim.y + dim.h + padding);
-        dim = dataGrid.getCellDims(numTableRows - 1, 2);
-        errorThreshold.setPosition(dim.x + 1, dim.y + dim.h + padding);
+        errorThreshold.setPosition(dim.x + thresholdTFWidth + padding, dim.y + dim.h + padding);
     }
 
     private void resizeTable() {
@@ -319,7 +317,6 @@ class W_CytonImpedance extends Widget {
             //Clear the cells and show buttons instead
             for (int i = 1; i < numTableRows; i++) {
                 dataGrid.setString(null, i, 1);
-                dataGrid.setString(null, i, 2);
             }
             //Toggle showing impedance test buttons
             imp_buttons_cp5.setVisible(true);

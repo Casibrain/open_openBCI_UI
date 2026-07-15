@@ -216,8 +216,12 @@ class CytonElectrodeStatus {
         measurement = thisElectrode.getMeasurementType();
         anatomicalName = thisElectrode.getLabelName();
         is_N_Pin = thisElectrode.isPin_N();
+        // For direct serial board: only P-pin testing, single column
+        if (isDirectSerialBoard) {
+            is_N_Pin = false;
+        }
         railedNF.setMaximumFractionDigits(2);
-        dataTableColumnOffset = is_N_Pin ? 1 : 2;
+        dataTableColumnOffset = 1; // Single status column (no N/P split)
         checkingElectrodeGif = statusGif;
 
         state_imp = ElectrodeState.GREYED_OUT;
