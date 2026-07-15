@@ -193,6 +193,45 @@ class ADS1299Settings {
         defaultValues = gson.fromJson(currentVals, ADS1299SettingsValues.class);
     }
 
+    // Resize all arrays to match current channel count (call after nchan changes)
+    public void resize(int newChannelCount) {
+        if (values.powerDown.length == newChannelCount) return;
+
+        values.powerDown = Arrays.copyOf(values.powerDown, newChannelCount);
+        Arrays.fill(values.powerDown, values.powerDown.length > 0 ? values.powerDown[0] : PowerDown.ON);
+        previousValues.powerDown = Arrays.copyOf(previousValues.powerDown, newChannelCount);
+        Arrays.fill(previousValues.powerDown, previousValues.powerDown.length > 0 ? previousValues.powerDown[0] : PowerDown.ON);
+
+        values.gain = Arrays.copyOf(values.gain, newChannelCount);
+        Arrays.fill(values.gain, values.gain.length > 0 ? values.gain[0] : Gain.X24);
+        previousValues.gain = Arrays.copyOf(previousValues.gain, newChannelCount);
+        Arrays.fill(previousValues.gain, previousValues.gain.length > 0 ? previousValues.gain[0] : Gain.X24);
+
+        values.inputType = Arrays.copyOf(values.inputType, newChannelCount);
+        Arrays.fill(values.inputType, values.inputType.length > 0 ? values.inputType[0] : InputType.NORMAL);
+        previousValues.inputType = Arrays.copyOf(previousValues.inputType, newChannelCount);
+        Arrays.fill(previousValues.inputType, previousValues.inputType.length > 0 ? previousValues.inputType[0] : InputType.NORMAL);
+
+        values.bias = Arrays.copyOf(values.bias, newChannelCount);
+        Arrays.fill(values.bias, values.bias.length > 0 ? values.bias[0] : Bias.INCLUDE);
+        previousValues.bias = Arrays.copyOf(previousValues.bias, newChannelCount);
+        Arrays.fill(previousValues.bias, previousValues.bias.length > 0 ? previousValues.bias[0] : Bias.INCLUDE);
+
+        values.srb2 = Arrays.copyOf(values.srb2, newChannelCount);
+        Arrays.fill(values.srb2, values.srb2.length > 0 ? values.srb2[0] : Srb2.CONNECT);
+        previousValues.srb2 = Arrays.copyOf(previousValues.srb2, newChannelCount);
+        Arrays.fill(previousValues.srb2, previousValues.srb2.length > 0 ? previousValues.srb2[0] : Srb2.CONNECT);
+
+        values.srb1 = Arrays.copyOf(values.srb1, newChannelCount);
+        Arrays.fill(values.srb1, values.srb1.length > 0 ? values.srb1[0] : Srb1.DISCONNECT);
+        previousValues.srb1 = Arrays.copyOf(previousValues.srb1, newChannelCount);
+        Arrays.fill(previousValues.srb1, previousValues.srb1.length > 0 ? previousValues.srb1[0] : Srb1.DISCONNECT);
+
+        values.previousBias = values.bias.clone();
+        values.previousSrb2 = values.srb2.clone();
+        values.previousInputType = values.inputType.clone();
+    }
+
     public boolean loadSettingsValues(String filename) {
         try {
             File file = new File(filename);

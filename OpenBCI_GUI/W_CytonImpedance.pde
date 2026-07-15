@@ -5,7 +5,8 @@ import java.util.concurrent.*;
 
 class W_CytonImpedance extends Widget {
 
-    private BoardCyton cytonBoard;
+    private Board cytonBoard;
+    private boolean isDirectSerialBoard = false;
 
     //Used to synchronize impedance command threads
     private final Object THREAD_LOCK = new Object();
@@ -17,7 +18,7 @@ class W_CytonImpedance extends Widget {
     private ControlP5 threshold_ui_cp5;
 
     private CytonSignalCheckMode signalCheckMode = CytonSignalCheckMode.IMPEDANCE;
-    private CytonImpedanceLabels labelMode = CytonImpedanceLabels.ADS_CHANNEL;
+    private CytonImpedanceLabels labelMode = CytonImpedanceLabels.ANATOMICAL;
     private CytonImpedanceInterval masterCheckInterval = CytonImpedanceInterval.FIVE;
     
     private final int padding = 5;
@@ -61,7 +62,12 @@ class W_CytonImpedance extends Widget {
     W_CytonImpedance(PApplet _parent){
         super(_parent); //calls the parent CONSTRUCTOR method of Widget (DON'T REMOVE)
 
-        cytonBoard = (BoardCyton) currentBoard;
+        if (currentBoard instanceof BoardCytonSerialDirect) {
+            cytonBoard = (Board)currentBoard;
+            isDirectSerialBoard = true;
+        } else {
+            cytonBoard = (BoardCyton) currentBoard;
+        }
 
         imp_buttons_cp5 = new ControlP5(ourApplet);
         imp_buttons_cp5.setGraphics(ourApplet, 0,0);
@@ -80,12 +86,11 @@ class W_CytonImpedance extends Widget {
         addDropdown("CytonImpedance_Mode", "Mode", signalCheckMode.getEnumStringsAsList(), signalCheckMode.getIndex());
 
         footerHeight = navH/2;
-        
-        if (currentBoard.getNumEXGChannels() > 8) {
-            numTableRows += 8;
-        }
 
-        //Create Table first!
+        // Init electrode map first to determine numTableRows
+        initCytonImpedanceMap();
+
+        //Create Table with correct row count
         dataGrid = new Grid(numTableRows, numTableColumns, cellHeight);
         dataGrid.setTableFontAndSize(p5, 12);
         dataGrid.setDrawTableBorder(true);
@@ -95,9 +100,6 @@ class W_CytonImpedance extends Widget {
         dataGrid.setString("P Status", 0, 2);
 
         setTableElectrodeNames();
-
-        //Init the electrode map and fill and create signal check buttons
-        initCytonImpedanceMap();
 
         cytonResetAllChannels = createCytonResetChannelsButton("cytonResetAllChannels", "Reset Channels", (int)(x0 + 1), (int)(y0 + navHeight + 1), 90, navHeight - 3, p5, 12, colorNotPressed, OPENBCI_DARKBLUE);
         cytonImpedanceMasterCheck = createCytonImpMasterCheckButton("cytonImpedanceMasterCheck", "Check All Channels", (int)(x0 + 1 + padding_3 + 90), (int)(y0 + navHeight + 1), 120, navHeight - 3, p5, 12, colorNotPressed, OPENBCI_DARKBLUE);
@@ -255,18 +257,27 @@ class W_CytonImpedance extends Widget {
     }
 
     private void initCytonImpedanceMap() {
-        if (nchan == 8) {
+        if (nchan <= 8) {
             cytonHeadplotStatic = loadImage("Cyton_8Ch_Static_Headplot_Image.png");
         } else {
             cytonHeadplotStatic = loadImage("Cyton_16Ch_Static_Headplot_Image.png");
         }
-        
-        //Instantiate electrodeStatus for all electrodes!
-        cytonElectrodeStatus = new CytonElectrodeStatus[nchan];
-        for (int i = 0; i < cytonElectrodeStatus.length; i++) {
-            cytonElectrodeStatus[i] = new CytonElectrodeStatus(imp_buttons_cp5, CytonElectrodeLocations.getByIndex(i), cytonBoard, checkingImpedanceOnElectrodeGif);
-            //println("CYTON ELECTRODE STATUS making electrode #", i);
+
+        // Use all detected channels, up to the number of defined electrode locations
+        int maxElectrodes = CytonElectrodeLocations.values().length;
+        int numElectrodes = Math.min(nchan, maxElectrodes);
+        if (nchan > maxElectrodes) {
+            println("W_CytonImpedance: " + nchan + " channels detected, using " + numElectrodes + " electrode positions");
         }
+
+        //Instantiate electrodeStatus for all electrodes!
+        cytonElectrodeStatus = new CytonElectrodeStatus[numElectrodes];
+        for (int i = 0; i < numElectrodes; i++) {
+            cytonElectrodeStatus[i] = new CytonElectrodeStatus(imp_buttons_cp5, CytonElectrodeLocations.getByIndex(i), cytonBoard, checkingImpedanceOnElectrodeGif);
+        }
+
+        // Update numTableRows to match actual electrode count
+        numTableRows = numElectrodes + 1; // +1 for header row
     }
 
     public void setTableElectrodeNames() {
@@ -407,8 +418,11 @@ class W_CytonImpedance extends Widget {
     }
 
     private Pair<String, ElectrodeState> getImpedanceStringAndState() {
-        final Integer CHAN_X = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getValue();
-        final Boolean CHAN_X_ISNPIN = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getKey();
+        Pair<Boolean, Integer> checkResult = isDirectSerialBoard ?
+            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP() :
+            ((BoardCyton)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP();
+        final Integer CHAN_X = checkResult.getValue();
+        final Boolean CHAN_X_ISNPIN = checkResult.getKey();
         final int NUM_FRONT_CHAN = 8;
         if (CHAN_X == null && CHAN_X_ISNPIN == null) {
             return new ImmutablePair<String, ElectrodeState>(null, ElectrodeState.GREYED_OUT);
@@ -504,12 +518,19 @@ class W_CytonImpedance extends Widget {
                         delay(100);
 
                         //Turn off impedance check on another electrode if checking there
-                        Integer checkingOtherChan = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getValue();
-                        Boolean checkingOtherChan_isNpin = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getKey();
+                        Pair<Boolean, Integer> otherCheck = isDirectSerialBoard ?
+                            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP() :
+                            ((BoardCyton)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP();
+                        Integer checkingOtherChan = otherCheck.getValue();
+                        Boolean checkingOtherChan_isNpin = otherCheck.getKey();
                         if (checkingOtherChan != null) {
                             if (checkingChanX != checkingOtherChan || (checkingChanX == checkingOtherChan && checkingChanX_isNpin != checkingOtherChan_isNpin)) {
                                 //println("-----SEND COMMAND TO TOGGLE OFF PREVIOUS ELECTRODE");
-                                cytonBoard.setCheckingImpedanceCyton(checkingOtherChan, false, checkingOtherChan_isNpin);
+                                if (isDirectSerialBoard) {
+                                    ((BoardCytonSerialDirect)cytonBoard).setCheckingImpedanceCyton(checkingOtherChan, false, checkingOtherChan_isNpin);
+                                } else {
+                                    ((BoardCyton)cytonBoard).setCheckingImpedanceCyton(checkingOtherChan, false, checkingOtherChan_isNpin);
+                                }
                                 
                                 checkingOtherChan = checkingOtherChan + 1;
                                 for (CytonElectrodeStatus e : cytonElectrodeStatus) {
@@ -518,8 +539,10 @@ class W_CytonImpedance extends Widget {
                                         && checkingOtherChan_isNpin.equals(e.getIsNPin())) {
                                             //println("TOGGLE OFF", e.getGUIChannelNumber(), e.getIsNPin(), "TOGGLE TO ==", false);
                                             e.overrideTestingButtonSwitch(false);
-                                            w_timeSeries.adsSettingsController.updateChanSettingsDropdowns(checkingOtherChan-1, cytonBoard.isEXGChannelActive(checkingOtherChan-1));
-                                            w_timeSeries.adsSettingsController.setHasUnappliedSettings(checkingOtherChan-1, false);
+                                            if (w_timeSeries.adsSettingsController != null && !isDirectSerialBoard) {
+                                                w_timeSeries.adsSettingsController.updateChanSettingsDropdowns(checkingOtherChan-1, cytonBoard.isEXGChannelActive(checkingOtherChan-1));
+                                                w_timeSeries.adsSettingsController.setHasUnappliedSettings(checkingOtherChan-1, false);
+                                            }
                                     }
                                 }
 
@@ -530,7 +553,9 @@ class W_CytonImpedance extends Widget {
                         }
 
                         //println("+++++TOGGLING IMPEDANCE");
-                        final Pair<Boolean, String> fullResponse = cytonBoard.setCheckingImpedanceCyton(checkingChanX, toggle, checkingChanX_isNpin);
+                        final Pair<Boolean, String> fullResponse = isDirectSerialBoard ?
+                            ((BoardCytonSerialDirect)cytonBoard).setCheckingImpedanceCyton(checkingChanX, toggle, checkingChanX_isNpin) :
+                            ((BoardCyton)cytonBoard).setCheckingImpedanceCyton(checkingChanX, toggle, checkingChanX_isNpin);
                         boolean response = fullResponse.getKey().booleanValue();
                         if (!response) {
                             println("Board Communication Error: Error sending impedance test commands. See additional info in Console Log. You may need to reset the hardware.");
@@ -538,8 +563,10 @@ class W_CytonImpedance extends Widget {
                             cytonImpedanceMasterCheck.setOff();
                         } else {
                             //If successful, update the front end components to reflect the new state
-                            w_timeSeries.adsSettingsController.updateChanSettingsDropdowns(checkingChanX, cytonBoard.isEXGChannelActive(checkingChanX));
-                            w_timeSeries.adsSettingsController.setHasUnappliedSettings(checkingChanX, false);
+                            if (w_timeSeries.adsSettingsController != null && !isDirectSerialBoard) {
+                                w_timeSeries.adsSettingsController.updateChanSettingsDropdowns(checkingChanX, cytonBoard.isEXGChannelActive(checkingChanX));
+                                w_timeSeries.adsSettingsController.setHasUnappliedSettings(checkingChanX, false);
+                            }
                         }
 
                         boolean shouldBeOn = toggle && response;
@@ -553,7 +580,10 @@ class W_CytonImpedance extends Widget {
                                 }
                         }
 
-                        Boolean isCheckingImpedance = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getLeft();
+                        Pair<Boolean, Integer> currentCheck = isDirectSerialBoard ?
+                            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP() :
+                            ((BoardCyton)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP();
+                        Boolean isCheckingImpedance = currentCheck.getLeft();
                         if (isCheckingImpedance != null) {
                             if (!currentBoard.isStreaming()) {
                                 cytonBoard.startStreaming();
@@ -633,81 +663,84 @@ class W_CytonImpedance extends Widget {
     }
 
     private void hardResetAllChannels() {
-
-        if (cytonMasterImpedanceCheckIsActive()) {
-            cytonImpedanceMasterCheck.setOff();
-            cytonBoard.stopStreaming();
-        }
-
-        if (topNav.dataStreamingButtonIsActive()) {
-            stopRunning();
-            topNav.resetStartStopButton();
-        }
-
-        //es.shutdown();
         int timeElapsed = millis();
-        //println("______________________________AWAITING TERMINATION OF EXECUTOR SERVICE___");
-        es.shutdown();
-        try {
-            if (!es.awaitTermination(10, TimeUnit.SECONDS)) {
-                es.shutdownNow();
-                println("ERROR: HAD TO FORCE EXECUTOR SERVICE SHUTDOWN");
+
+        if (isDirectSerialBoard) {
+            // Fast path for direct serial: just clear flags and send reset command
+            // No per-channel toggle needed — avoids deadlock and 5s timeouts
+            ((BoardCytonSerialDirect)cytonBoard).clearAllImpedanceFlags();
+
+            cytonBoard.sendCommand("d");
+            delay(100);
+            cytonBoard.sendCommand("d");
+
+            for (CytonElectrodeStatus e : cytonElectrodeStatus) {
+                e.resetTestingButton();
             }
-        } catch (InterruptedException ex) {
-            ex.printStackTrace();
-            es.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-        es = Executors.newCachedThreadPool();
-        
-        /*
-        final Integer checkingChanX = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getValue();
-        final Boolean checkingChanX_isNpin = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getKey();
-        if (checkingChanX != null) {
-            println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&HAVING TO FORCE TURN OFF AN ELECTRODE THAT WAS LEFT ON");
-        }
-        */
-
-        turnOffImpedanceCheckPreviousElectrode();
-        setLockAllImpedanceTestingButtons(true);
-
-        es.shutdown();
-        try {
-            if (!es.awaitTermination(10, TimeUnit.SECONDS)) {
-                es.shutdownNow();
-                println("ERROR: HAD TO FORCE EXECUTOR SERVICE SHUTDOWN");
+        } else {
+            // BrainFlow path: use existing per-channel toggle logic
+            if (cytonMasterImpedanceCheckIsActive()) {
+                cytonImpedanceMasterCheck.setOff();
+                cytonBoard.stopStreaming();
             }
-        } catch (InterruptedException ex) {
-            ex.printStackTrace();
-            es.shutdownNow();
-            Thread.currentThread().interrupt();
+
+            if (topNav.dataStreamingButtonIsActive()) {
+                stopRunning();
+                topNav.resetStartStopButton();
+            }
+
+            es.shutdown();
+            try {
+                if (!es.awaitTermination(10, TimeUnit.SECONDS)) {
+                    es.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                es.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            es = Executors.newCachedThreadPool();
+
+            turnOffImpedanceCheckPreviousElectrode();
+            setLockAllImpedanceTestingButtons(true);
+
+            es.shutdown();
+            try {
+                if (!es.awaitTermination(10, TimeUnit.SECONDS)) {
+                    es.shutdownNow();
+                }
+            } catch (InterruptedException ex) {
+                es.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            es = Executors.newCachedThreadPool();
+
+            cytonBoard.sendCommand("d");
+            delay(100);
+            cytonBoard.sendCommand("d");
         }
-        es = Executors.newCachedThreadPool();
-        
-        // Send board reset twice to increase success rate
-        cytonBoard.sendCommand("d");
-        delay(100);
-        cytonBoard.sendCommand("d");
 
-        // Update ADS1299 settings to default but don't commit. Instead, sent "d" command twice.
-        cytonBoard.getADS1299Settings().revertAllChannelsToDefaultValues();
-        w_timeSeries.adsSettingsController.updateAllChanSettingsDropdowns();
-
-        timeElapsed = millis() - timeElapsed;
-        StringBuilder sb = new StringBuilder("Cyton Impedance Check: Hard reset to default board mode took -- ");
-        sb.append(timeElapsed);
-        sb.append(" ms");
-        println(sb.toString());
+        if (cytonBoard instanceof ADS1299SettingsBoard) {
+            ((ADS1299SettingsBoard)cytonBoard).getADS1299Settings().revertAllChannelsToDefaultValues();
+        }
+        if (w_timeSeries.adsSettingsController != null && !isDirectSerialBoard) {
+            w_timeSeries.adsSettingsController.updateAllChanSettingsDropdowns();
+        }
 
         prevMasterCheckCounter--;
         setLockAllImpedanceTestingButtons(false);
+
+        timeElapsed = millis() - timeElapsed;
+        println("Cyton Impedance Check: Hard reset took " + timeElapsed + " ms");
         outputSuccess("Cyton: All channels have been reset and board is in default mode!\n");
     }
 
     private void turnOffImpedanceCheckPreviousElectrode() {
         //Turn off impedance check on another electrode if checking there
-        final Integer checkingChanX = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getValue();
-        final Boolean checkingChanX_isNpin = cytonBoard.isCheckingImpedanceOnAnyChannelsNorP().getKey();
+        Pair<Boolean, Integer> prevCheck = isDirectSerialBoard ?
+            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP() :
+            ((BoardCyton)cytonBoard).isCheckingImpedanceOnAnyChannelsNorP();
+        final Integer checkingChanX = prevCheck.getValue();
+        final Boolean checkingChanX_isNpin = prevCheck.getKey();
         if (checkingChanX != null) {
             //println("---------------------------TURN OFF IMPEDANCE CHECK ON ELECTRODE="+checkingChanX+" | IS_N_PIN="+checkingChanX_isNpin);
             toggleImpedanceOnElectrode(false, checkingChanX, checkingChanX_isNpin, millis());
@@ -741,13 +774,13 @@ class W_CytonImpedance extends Widget {
 //These functions need to be global! These functions are activated when an item from the corresponding dropdown is selected
 //Update: It's not worth the trouble to implement a callback listener in the widget for this specifc kind of dropdown. Keep using this pattern for widget Nav dropdowns. - February 2021 RW
 void CytonImpedance_Mode(int n) {
-    w_cytonImpedance.setSignalCheckMode(n);
+    if (w_cytonImpedance != null) w_cytonImpedance.setSignalCheckMode(n);
 }
 
 void CytonImpedance_LabelMode(int n) {
-    w_cytonImpedance.setShowAnatomicalName(n);
+    if (w_cytonImpedance != null) w_cytonImpedance.setShowAnatomicalName(n);
 }
 
 void CytonImpedance_MasterCheckInterval(int n) {
-    w_cytonImpedance.setMasterCheckInterval(n);
+    if (w_cytonImpedance != null) w_cytonImpedance.setMasterCheckInterval(n);
 }

@@ -35,22 +35,39 @@ interface CytonElectrodeEnum {
 
 public enum CytonElectrodeLocations implements CytonElectrodeEnum
 {
+    // Channel order matches Time Series (standard 10-20 for 32ch Cyton)
     ONE_N(0, 1, "1N", "EEG", 0.10000, 0.38992, "Fp1", 0.50000, 0.15265),
     TWO_N(1, 2, "2N", "EEG", 0.10000, 0.51967, "Fp2", 0.50000, 0.18308),
-    THREE_N(2, 3, "3N", "EEG", 0.10000,   0.64941, "C3", 0.50000, 0.11283),
-    FOUR_N(3, 4, "4N", "EEG", 0.10000, 0.92547, "C4", 0.50000, 0.17101),
-    FIVE_N(4, 5, "5N", "EEG", 0.18140,   0.64941, "P7", 0.38278, 0.19765),
-    SIX_N(5, 6, "6N", "EEG", 0.11781,	0.64941, "P8", 0.61722, 0.19765),
-    SEVEN_N(6, 7, "7N", "EEG", 0.17313, 0.88820, "O1", 0.37352, 0.15514),
-    EIGHT_N(7, 8, "8N", "EEG", 0.12608, 0.88820, "O2", 0.62530, 0.15514),
-    NINE_N(8, 9, "9N", "EEG", 0.10000, 0.38992, "F7", 0.50000, 0.15265),
-    TEN_N(9, 10, "10N", "EEG", 0.10000, 0.51967, "F8", 0.50000, 0.18308),
-    ELEVEN_N(10, 11, "11N", "EEG", 0.10000,   0.64941, "F3", 0.50000, 0.11283),
-    TWELVE_N(11, 12, "12N", "EEG", 0.10000, 0.92547, "F4", 0.50000, 0.17101),
-    THIRTEEN_N(12, 13, "13N", "EEG", 0.18140,   0.64941, "T7", 0.18278, 0.19765),
-    FOURTEEN_N(13, 14, "14N", "EEG", 0.11781,	0.64941, "T8", 0.11722, 0.19765),
-    FIFTEEN_N(14, 15, "15N", "EEG", 0.17313, 0.88820, "P3", 0.11352, 0.11514),
-    SIXTEEN_N(15, 16, "16N", "EEG", 0.12608, 0.88820, "P4", 0.11530, 0.11514);
+    THREE_N(2, 3, "3N", "EEG", 0.12000, 0.42000, "AF3", 0.50000, 0.13000),
+    FOUR_N(3, 4, "4N", "EEG", 0.12000, 0.49000, "AF4", 0.50000, 0.16000),
+    FIVE_N(4, 5, "5N", "EEG", 0.10000, 0.58000, "F7", 0.50000, 0.15265),
+    SIX_N(5, 6, "6N", "EEG", 0.12000, 0.54000, "F3", 0.50000, 0.11283),
+    SEVEN_N(6, 7, "7N", "EEG", 0.14500, 0.50000, "Fz", 0.50000, 0.08000),
+    EIGHT_N(7, 8, "8N", "EEG", 0.12000, 0.58000, "F4", 0.50000, 0.17101),
+    NINE_N(8, 9, "9N", "EEG", 0.10000, 0.65000, "F8", 0.50000, 0.18308),
+    TEN_N(9, 10, "10N", "EEG", 0.14500, 0.56000, "FC5", 0.35000, 0.14000),
+    ELEVEN_N(10, 11, "11N", "EEG", 0.14500, 0.52000, "FC1", 0.35000, 0.11000),
+    TWELVE_N(11, 12, "12N", "EEG", 0.14500, 0.60000, "FC2", 0.35000, 0.08000),
+    THIRTEEN_N(12, 13, "13N", "EEG", 0.14500, 0.66000, "FC6", 0.35000, 0.05000),
+    FOURTEEN_N(13, 14, "14N", "EEG", 0.18140, 0.56000, "T7", 0.18278, 0.19765),
+    FIFTEEN_N(14, 15, "15N", "EEG", 0.18140, 0.62000, "C3", 0.50000, 0.11283),
+    SIXTEEN_N(15, 16, "16N", "EEG", 0.20000, 0.56000, "Cz", 0.50000, 0.06000),
+    SEVENTEEN_N(16, 17, "17N", "EEG", 0.18140, 0.70000, "C4", 0.50000, 0.17101),
+    EIGHTEEN_N(17, 18, "18N", "EEG", 0.18140, 0.78000, "T8", 0.11722, 0.19765),
+    NINETEEN_N(18, 19, "19N", "EEG", 0.22000, 0.56000, "CP5", 0.18000, 0.14000),
+    TWENTY_N(19, 20, "20N", "EEG", 0.22000, 0.60000, "CP1", 0.18000, 0.11000),
+    TWENTYONE_N(20, 21, "21N", "EEG", 0.22000, 0.68000, "CP2", 0.18000, 0.08000),
+    TWENTYTWO_N(21, 22, "22N", "EEG", 0.22000, 0.72000, "CP6", 0.18000, 0.05000),
+    TWENTYTHREE_N(22, 23, "23N", "EEG", 0.25000, 0.60000, "P7", 0.38278, 0.19765),
+    TWENTYFOUR_N(23, 24, "24N", "EEG", 0.25000, 0.64000, "P3", 0.11352, 0.11514),
+    TWENTYFIVE_N(24, 25, "25N", "EEG", 0.27000, 0.58000, "Pz", 0.50000, 0.05000),
+    TWENTYSIX_N(25, 26, "26N", "EEG", 0.25000, 0.72000, "P4", 0.11530, 0.11514),
+    TWENTYSEVEN_N(26, 27, "27N", "EEG", 0.25000, 0.80000, "P8", 0.61722, 0.19765),
+    TWENTYEIGHT_N(27, 28, "28N", "EEG", 0.30000, 0.58000, "PO3", 0.12000, 0.13000),
+    TWENTYNINE_N(28, 29, "29N", "EEG", 0.32000, 0.62000, "POz", 0.50000, 0.03000),
+    THIRTY_N(29, 30, "30N", "EEG", 0.30000, 0.68000, "PO4", 0.12000, 0.02000),
+    THIRTYONE_N(30, 31, "31N", "EEG", 0.34000, 0.60000, "O1", 0.37352, 0.15514),
+    THIRTYTWO_N(31, 32, "32N", "EEG", 0.34000, 0.68000, "O2", 0.62530, 0.15514);
 
     private int index;
     private Integer guiChan;
@@ -155,7 +172,8 @@ class CytonElectrodeStatus {
 
     private CytonElectrodeLocations thisElectrode;
 
-    protected BoardCyton cytonBoard;
+    protected Board cytonBoard;
+    private boolean isDirectSerialBoard = false;
     protected Integer channelNumber;
     protected String electrodeLocation;
     protected String measurement;
@@ -185,9 +203,10 @@ class CytonElectrodeStatus {
     protected Gif checkingElectrodeGif;
     protected final int gifDiameterBorderOffset = 30; //From the weight of the pixels in the original gif
 
-    CytonElectrodeStatus(ControlP5 _cp5, CytonElectrodeEnum electrodeEnum, BoardCyton _impBoard, Gif statusGif) {
+    CytonElectrodeStatus(ControlP5 _cp5, CytonElectrodeEnum electrodeEnum, Board _impBoard, Gif statusGif) {
         local_cp5 = _cp5;
-        cytonBoard = (BoardCyton)_impBoard;
+        cytonBoard = _impBoard;
+        isDirectSerialBoard = (_impBoard instanceof BoardCytonSerialDirect);
         impedanceNF = new DecimalFormat("###,###.#");
         impShortNF = new DecimalFormat("###,###");
 
@@ -221,7 +240,10 @@ class CytonElectrodeStatus {
         ellipseMode(CENTER);
         ellipse(x, y, d, d);
 
-        if (state != ElectrodeState.NOT_TESTABLE && cytonBoard.isCheckingImpedanceNorP(channelNumber-1, is_N_Pin)) {
+        boolean checkingImp = isDirectSerialBoard ?
+            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceNorP(channelNumber-1, is_N_Pin) :
+            ((BoardCyton)cytonBoard).isCheckingImpedanceNorP(channelNumber-1, is_N_Pin);
+        if (state != ElectrodeState.NOT_TESTABLE && checkingImp) {
             imageMode(CENTER);
             image(checkingElectrodeGif, x - 1, y - 1, d + gifDiameterBorderOffset, d + gifDiameterBorderOffset);
         }
@@ -239,7 +261,10 @@ class CytonElectrodeStatus {
 
         int i = channelNumber - 1;
 
-        if (_isImpedanceMode && cytonBoard.isCheckingImpedanceNorP(i, is_N_Pin) && cytonBoard.isStreaming()) {
+        boolean checkingImp2 = isDirectSerialBoard ?
+            ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceNorP(i, is_N_Pin) :
+            ((BoardCyton)cytonBoard).isCheckingImpedanceNorP(i, is_N_Pin);
+        if (_isImpedanceMode && checkingImp2 && cytonBoard.isStreaming()) {
             
             //update the impedance values
             statusValue = data_elec_imp_ohm[i]/1000; //value in kOhm
@@ -346,7 +371,10 @@ class CytonElectrodeStatus {
                 final int _chan = channelNumber - 1;
                 final int curMillis = millis();
                 println("CytonElectrodeTestButton: Toggling Impedance on ~~ " + electrodeLocation);
-                w_cytonImpedance.toggleImpedanceOnElectrode(!cytonBoard.isCheckingImpedanceNorP(_chan, is_N_Pin), _chan, is_N_Pin, curMillis);
+                boolean currentlyChecking = isDirectSerialBoard ?
+                    ((BoardCytonSerialDirect)cytonBoard).isCheckingImpedanceNorP(_chan, is_N_Pin) :
+                    ((BoardCyton)cytonBoard).isCheckingImpedanceNorP(_chan, is_N_Pin);
+                w_cytonImpedance.toggleImpedanceOnElectrode(!currentlyChecking, _chan, is_N_Pin, curMillis);
             }
         });
         testing_button.setDescription("Click to toggle impedance check for this ADS pin.");

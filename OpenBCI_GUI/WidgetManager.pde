@@ -49,7 +49,7 @@ void setupWidgets(PApplet _this, ArrayList<Widget> w){
         addWidget(w_accelerometer, w);
     }
 
-    if (currentBoard instanceof BoardCyton) {
+    if (currentBoard instanceof BoardCyton || currentBoard instanceof BoardCytonSerialDirect) {
         w_cytonImpedance = new W_CytonImpedance(_this);
         w_cytonImpedance.setTitle("Cyton Signal");
         addWidget(w_cytonImpedance, w);

@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 //------------------------------------------------------------------------
 //Used to check GUI version in TopNav.pde and displayed on the splash screen on startup
 String localGUIVersionString = "v6.0.0-beta.1";
-String localGUIVersionDate = "2026/07/12 20:17:56";
+String localGUIVersionDate = "2026/07/14 17:35:19";
 
 PApplet ourApplet;
 
@@ -706,6 +706,11 @@ void initSystem() {
     }
 
     updateToNChan(currentBoard.getNumEXGChannels());
+
+    // Resize ADS1299 settings arrays if channel count changed from default
+    if (currentBoard instanceof ADS1299SettingsBoard) {
+        ((ADS1299SettingsBoard)currentBoard).getADS1299Settings().resize(nchan);
+    }
 
     dataLogger.initialize();
 

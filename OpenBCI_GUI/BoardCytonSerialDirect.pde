@@ -7,7 +7,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
+import java.util.Arrays;
+
+class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard, ImpedanceSettingsBoard, ADS1299SettingsBoard {
 
     public BoardIds getBoardId() {
         return BoardIds.CYTON_BOARD;
@@ -33,22 +35,25 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private int candidateCount = 0; // Consecutive packets with same size for confirmation
     private static final int CANDIDATE_THRESHOLD = 3; // Require 3 matching packets to confirm
     private boolean preDetectionPhase = false; // suppresses updateToNChan during initializeInternal()
-    private final int NUM_AUX_CHANNELS = 3;
-    private final float SAMPLE_RATE = 250.0f;
-    private final float ADS1299_Vref = 4.5f;
+    private final int NUM_AUX_CHANNELS = 9;  // 9-axis: accelerometer + gyroscope + magnetometer
+    private final int NUM_MARKER_CHANNELS = 6;
+    private final float SAMPLE_RATE = 500.0f;
+    private final float ADS1299_Vref = 5.0f;   // new_pro.md: 5V reference
     private final float ADS1299_gain = 24.0f;
     private final float scale_fac_uVolts_per_count = ADS1299_Vref / ((float)(pow(2, 23) - 1)) / ADS1299_gain * 1000000.0f;
     private final float scale_fac_accel_G_per_count = 0.002f / ((float)pow(2, 4));
 
     // Packet parsing state - state machine with byte counting
-    // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 6(AUX) + 1(end) = 9 + N*3
-    // Valid sizes: 8ch=33, 16ch=57, 32ch=105, etc.
+    // Packet structure: 1(start) + 1(counter) + N*3(EEG) + 18(AUX) + 6(Marker) + 1(end)
+    // = 27 + N*3 bytes.  Valid sizes: 8ch=51, 16ch=75, 32ch=123, etc.
+    // NOTE: new_pro.md shows 122 bytes for 32ch — may be a doc rounding issue.
     private final byte BYTE_START = (byte)0xA0;
     private final byte BYTE_END = (byte)0xC0;
     private static final int MAX_PACKET_SIZE = 512;
     private static final int PACKET_HEADER = 2; // start byte + frame number
     private static final int PACKET_FOOTER = 1; // end byte
-    private static final int PACKET_AUX_SIZE = 6; // 3 channels × 2 bytes
+    private static final int PACKET_AUX_SIZE = 18; // 9-axis × 2 bytes
+    private static final int PACKET_MARKER_SIZE = 6;
     private int packetState = 0; // 0=waiting for start, 1=reading body, 2=done
     private int packetPosition = 0; // bytes read in current packet (including start)
     private int expectedPacketSize = 0; // 0 = not yet detected
@@ -58,6 +63,30 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     // Parsed data - sized to maximum (128 channels)
     private double[] parsedEegValues = new double[128];
     private double[] parsedAuxValues = new double[NUM_AUX_CHANNELS];
+    private double[] parsedMarkerValues = new double[NUM_MARKER_CHANNELS];
+
+    // Handshake state machine
+    // STATE_NOCOM=0, STATE_COMINIT=1, STATE_SYNCWITHHARDWARE=2, STATE_NORMAL=3, STATE_STOPPED=4
+    private static final int STATE_NOCOM = 0;
+    private static final int STATE_COMINIT = 1;
+    private static final int STATE_SYNCWITHHARDWARE = 2;
+    private static final int STATE_NORMAL = 3;
+    private static final int STATE_STOPPED = 4;
+    private int handshakeState = STATE_NOCOM;
+    private boolean handshakeComplete = false;
+
+    // EOT ($$$) detection for command acknowledgment
+    private final byte[] eotSequence = {(byte)'$', (byte)'$', (byte)'$'};
+    private int eotMatchIndex = 0;
+
+    // Impedance state per channel (N and P pins)
+    private boolean[] isCheckingImpedanceN;
+    private boolean[] isCheckingImpedanceP;
+    private char[] channelSelectForSettings = {'1','2','3','4','5','6','7','8','Q','W','E','R','T','Y','U','I',
+                                               '1','2','3','4','5','6','7','8','Q','W','E','R','T','Y','U','I'};
+
+    // ADS1299 settings (default: all channels ON, gain X24, normal input)
+    private ADS1299Settings currentADS1299Settings;
 
     // Data buffers - use a queue to hold all parsed packets between frames
     private ArrayList<double[]> pendingDataQueue = new ArrayList<double[]>();
@@ -76,6 +105,14 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         super();
         this.portName = portName;
         setSmoothingActive(true);
+        isCheckingImpedanceN = new boolean[128];
+        isCheckingImpedanceP = new boolean[128];
+        // Defer ADS1299Settings creation until channel count is known
+    }
+
+    // Call after channel detection to initialize settings with correct channel count
+    public void initADS1299Settings() {
+        currentADS1299Settings = new CytonDefaultSettings(this);
     }
 
     public synchronized void setSmoothingActive(boolean active) {
@@ -157,6 +194,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             }
 
             println("BoardCytonSerialDirect: Port opened successfully");
+            handshakeState = STATE_COMINIT;
 
             // Flush pending data
             byte[] flushBuffer = new byte[4096];
@@ -187,10 +225,29 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             readerThread.setDaemon(true);
             readerThread.start();
 
-            println("BoardCytonSerialDirect: Board initialized, reader thread started");
+            // === Handshake sequence per new_pro.md protocol ===
+            // Step 1: Wait 3000ms for board initialization (STATE_COMINIT)
+            println("BoardCytonSerialDirect: Waiting 3s for board initialization...");
+            try { Thread.sleep(3000); } catch (Exception e) {}
 
-            // Pre-detect channel count by reading a few packets before returning
-            // This ensures the GUI initializes with the correct channel count
+            // Step 2: Send 'v' to reset hardware, wait for '$$$' (STATE_SYNCWITHHARDWARE)
+            println("BoardCytonSerialDirect: Sending 'v' reset command...");
+            handshakeState = STATE_SYNCWITHHARDWARE;
+            sendCommandRaw("v");
+
+            boolean gotEot = waitForEot(5000);
+            if (!gotEot) {
+                println("BoardCytonSerialDirect: WARNING - No '$$$' after 'v', board may not be Cyton. Proceeding anyway.");
+            } else {
+                println("BoardCytonSerialDirect: Got '$$$' — hardware reset confirmed");
+            }
+
+            // Step 3: Send 'b' to start data streaming
+            println("BoardCytonSerialDirect: Sending 'b' start command...");
+            sendCommandRaw("b");
+            handshakeState = STATE_NORMAL;
+
+            // Step 4: Pre-detect channel count from incoming packets
             println("BoardCytonSerialDirect: Detecting channel count...");
             preDetectionPhase = true;
             long detectStart = System.currentTimeMillis();
@@ -210,12 +267,15 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             if (channelsDetected) {
                 println("BoardCytonSerialDirect: Channel detection complete: " + numEegChannels + " channels");
             } else {
-                println("BoardCytonSerialDirect: Channel detection timed out, defaulting to 8 channels");
-                numEegChannels = 8;
+                println("BoardCytonSerialDirect: Channel detection timed out, defaulting to 32 channels");
+                numEegChannels = 32;
                 channelsDetected = true;
-                expectedPacketSize = 33; // 8ch default
+                expectedPacketSize = 27 + 32 * 3; // 123 bytes for 32ch
             }
             preDetectionPhase = false;
+
+            // Initialize ADS1299 settings now that channel count is known
+            initADS1299Settings();
 
             return true;
         } catch (Exception e) {
@@ -227,6 +287,12 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
     @Override
     public void uninitializeInternal() {
+        // Send 's' to stop data streaming before closing
+        if (serialPort != null && serialPort.isOpen()) {
+            println("BoardCytonSerialDirect: Sending 's' stop command");
+            sendCommandRaw("s");
+            try { Thread.sleep(100); } catch (Exception e) {}
+        }
         streaming = false;
         readerRunning = false;
         if (readerThread != null) {
@@ -357,7 +423,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         for (int i = 0; i < numEegChannels; i++) {
             channelNames[i] = (i < ELEC_NAMES_32.length) ? ELEC_NAMES_32[i] : "EEG_" + (i + 1);
         }
-        for (int i = 0; i < NUM_AUX_CHANNELS; i++) channelNames[numEegChannels + i] = "Aux_" + (i + 1);
+        // 9-axis AUX names: Accel XYZ, Gyro XYZ, Mag XYZ
+        String[] auxNames = {"Accel_X", "Accel_Y", "Accel_Z", "Gyro_X", "Gyro_Y", "Gyro_Z", "Mag_X", "Mag_Y", "Mag_Z"};
+        for (int i = 0; i < NUM_AUX_CHANNELS; i++) {
+            channelNames[numEegChannels + i] = (i < auxNames.length) ? auxNames[i] : "Aux_" + (i + 1);
+        }
         channelNames[numEegChannels + NUM_AUX_CHANNELS] = "Timestamp";
         channelNames[numEegChannels + NUM_AUX_CHANNELS + 1] = "SampleIndex";
         channelNames[numEegChannels + NUM_AUX_CHANNELS + 2] = "Marker";
@@ -382,10 +452,233 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         return new ImmutablePair<>(false, "");
     }
 
+    // Low-level send without EOT wait (used during handshake)
+    private void sendCommandRaw(String command) {
+        if (serialPort != null && serialPort.isOpen()) {
+            try {
+                byte[] data = command.getBytes();
+                serialPort.writeBytes(data, data.length);
+            } catch (Exception e) {
+                println("BoardCytonSerialDirect: Send error: " + e.getMessage());
+            }
+        }
+    }
+
+    // Wait for '$$$' EOT sequence from the board after sending a command
+    private boolean waitForEot(long timeoutMs) {
+        long start = System.currentTimeMillis();
+        eotMatchIndex = 0;
+        while ((System.currentTimeMillis() - start) < timeoutMs) {
+            int b = ringRead();
+            if (b < 0) {
+                try { Thread.sleep(1); } catch (Exception e) {}
+                continue;
+            }
+            if ((byte)b == eotSequence[eotMatchIndex]) {
+                eotMatchIndex++;
+                if (eotMatchIndex >= eotSequence.length) {
+                    return true; // Got full $$$
+                }
+            } else {
+                eotMatchIndex = 0;
+                // Re-check current byte as possible start of $$$
+                if ((byte)b == eotSequence[0]) {
+                    eotMatchIndex = 1;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override public void insertMarker(double value) {}
     @Override public void insertMarker(int value) {}
     @Override public void setEXGChannelActive(int channelIndex, boolean active) {}
     @Override public boolean isEXGChannelActive(int channelIndex) { return true; }
+
+    // === ImpedanceSettingsBoard ===
+
+    @Override
+    public void setCheckingImpedance(int channel, boolean active) {
+        isCheckingImpedanceP[channel] = active;
+    }
+
+    @Override
+    public boolean isCheckingImpedance(int channel) {
+        return isCheckingImpedanceN[channel] || isCheckingImpedanceP[channel];
+    }
+
+    @Override
+    public Integer isCheckingImpedanceOnChannel() {
+        for (int i = 0; i < getNumEXGChannels(); i++) {
+            if (isCheckingImpedance(i)) return i;
+        }
+        return null;
+    }
+
+    public boolean isCheckingImpedanceNorP(int channel, boolean isN) {
+        return isN ? isCheckingImpedanceN[channel] : isCheckingImpedanceP[channel];
+    }
+
+    public Pair<Boolean, Integer> isCheckingImpedanceOnAnyChannelsNorP() {
+        for (int i = 0; i < getNumEXGChannels(); i++) {
+            if (isCheckingImpedanceN[i]) return new ImmutablePair<>(true, i);
+            if (isCheckingImpedanceP[i]) return new ImmutablePair<>(false, i);
+        }
+        return new ImmutablePair<>(null, null);
+    }
+
+    // Impedance command: z<channel><p><n>Z, response: <channel><p><n> (p,n = 0-255)
+    public Pair<Boolean, String> setCheckingImpedanceCyton(int channel, boolean active, boolean isN) {
+        if (active) {
+            // Stop streaming before sending impedance command
+            if (streaming) {
+                sendCommandRaw("s");
+                streaming = false;
+                try { Thread.sleep(100); } catch (Exception e) {}
+            }
+            char chanChar = channelSelectForSettings[channel];
+            char p = isN ? '0' : '1';
+            char n = isN ? '1' : '0';
+            String cmd = String.format("z%c%c%cZ", chanChar, p, n);
+            sendCommandRaw(cmd);
+
+            // Read impedance response from serial
+            boolean gotResponse = waitForImpedanceResponse(channel, 5000);
+            if (gotResponse) {
+                // Resume streaming
+                sendCommandRaw("b");
+                streaming = true;
+                if (isN) {
+                    isCheckingImpedanceN[channel] = true;
+                } else {
+                    isCheckingImpedanceP[channel] = true;
+                }
+                return new ImmutablePair<>(true, "");
+            } else {
+                return new ImmutablePair<>(false, "No impedance response");
+            }
+        } else {
+            // Turn off impedance check
+            if (isN) {
+                isCheckingImpedanceN[channel] = false;
+            } else {
+                isCheckingImpedanceP[channel] = false;
+            }
+            return new ImmutablePair<>(true, "");
+        }
+    }
+
+    // Parse impedance response: channel(1-2 digits) + p(0-255) + n(0-255)
+    // Example: "450" = channel 4, p=5, n=0
+    private boolean waitForImpedanceResponse(int expectedChannel, long timeoutMs) {
+        long start = System.currentTimeMillis();
+        StringBuilder response = new StringBuilder();
+        while ((System.currentTimeMillis() - start) < timeoutMs) {
+            int b = ringRead();
+            if (b < 0) {
+                try { Thread.sleep(1); } catch (Exception e) {}
+                continue;
+            }
+            char c = (char) b;
+            if (c >= '0' && c <= '9') {
+                response.append(c);
+            } else if (c == '$') {
+                // Might be start of EOT
+                // Check for $$$
+                int dollarCount = 1;
+                long savedStart = System.currentTimeMillis();
+                while (dollarCount < 3 && (System.currentTimeMillis() - savedStart) < 100) {
+                    int nb = ringRead();
+                    if (nb < 0) { try { Thread.sleep(1); } catch (Exception e) {} continue; }
+                    if ((char)nb == '$') {
+                        dollarCount++;
+                    } else {
+                        break;
+                    }
+                }
+                // Parse accumulated response
+                if (response.length() >= 3) {
+                    parseImpedanceResponse(response.toString());
+                    return true;
+                }
+                response.setLength(0);
+            }
+        }
+        return false;
+    }
+
+    // Parse response string like "450" into channel, p-value, n-value
+    // Store result in data_elec_imp_ohm for widget display
+    private void parseImpedanceResponse(String resp) {
+        try {
+            // Response format: channel(1-2 digits) + p_value(0-255) + n_value(0-255)
+            // Minimal: 3 chars (1-digit channel + p + n)
+            if (resp.length() < 3) return;
+            int idx = 0;
+            int channel = 0;
+            // Parse channel number (1 or 2 digits)
+            while (idx < resp.length() && resp.charAt(idx) >= '0' && resp.charAt(idx) <= '9' && idx < 2) {
+                channel = channel * 10 + (resp.charAt(idx) - '0');
+                idx++;
+            }
+            if (channel < 1 || channel > getNumEXGChannels()) return;
+            int chanIdx = channel - 1;
+            // Parse p value
+            if (idx < resp.length()) {
+                int pVal = resp.charAt(idx) - '0';
+                idx++;
+                // Parse n value
+                int nVal = 0;
+                if (idx < resp.length()) {
+                    nVal = resp.charAt(idx) - '0';
+                }
+                // Convert to ohms: value * 1000 (rough approximation, adjust based on board firmware)
+                // The firmware returns a raw value; convert to approximate ohms
+                double impP = pVal * 1000.0;
+                double impN = nVal * 1000.0;
+                // Store the higher of P and N as the channel impedance
+                data_elec_imp_ohm[chanIdx] = (float)Math.max(impP, impN);
+                println("BoardCytonSerialDirect: Impedance ch" + channel + " = " + data_elec_imp_ohm[chanIdx] + " ohms (p=" + pVal + ", n=" + nVal + ")");
+            }
+        } catch (Exception e) {
+            println("BoardCytonSerialDirect: Error parsing impedance response: " + e.getMessage());
+        }
+    }
+
+    // === ADS1299SettingsBoard ===
+
+    @Override
+    public ADS1299Settings getADS1299Settings() {
+        if (currentADS1299Settings == null) {
+            initADS1299Settings();
+        }
+        return currentADS1299Settings;
+    }
+
+    @Override
+    public char getChannelSelector(int channel) {
+        return channelSelectForSettings[channel];
+    }
+
+    @Override
+    public double getGain(int channel) {
+        return getADS1299Settings().values.gain[channel].getScalar();
+    }
+
+    public void forceStopImpedanceFrontEnd(Integer channel, Boolean isN) {
+        if (channel == null || isN == null) return;
+        if (isN) {
+            isCheckingImpedanceN[channel] = false;
+        } else {
+            isCheckingImpedanceP[channel] = false;
+        }
+    }
+
+    // Fast reset: clear all impedance flags without per-channel communication
+    public void clearAllImpedanceFlags() {
+        Arrays.fill(isCheckingImpedanceN, false);
+        Arrays.fill(isCheckingImpedanceP, false);
+    }
 
     private int threeBytesToInt(byte b0, byte b1, byte b2) {
         int val = (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16);
@@ -430,9 +723,11 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
                     // Before expectedPacketSize, just keep reading (ignore any 0xC0 in data)
                 } else {
                     // Channel count not yet detected — try to detect from packet size
-                    if (actbyte == BYTE_END && packetPosition >= 10) {
+                    // Packet = 2(header) + N*3(EEG) + 18(AUX) + 6(Marker) + 1(end) = 27 + N*3
+                    int packetOverhead = PACKET_HEADER + PACKET_AUX_SIZE + PACKET_MARKER_SIZE + PACKET_FOOTER; // 2+18+6+1=27
+                    if (actbyte == BYTE_END && packetPosition >= packetOverhead + 3) {
                         // Found end byte, check if packet size is valid
-                        int eegBytes = packetPosition - 9;
+                        int eegBytes = packetPosition - packetOverhead;
                         if (eegBytes > 0 && eegBytes % 3 == 0) {
                             int channels = eegBytes / 3;
                             if (channels >= 1 && channels <= 128) {
@@ -476,7 +771,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
     private void processCompletePacket() {
         packetState = 0;
 
-        // Validate packet: start byte + counter + N*3 EEG + 6 AUX + end = expectedPacketSize
+        // Validate packet: start byte + counter + N*3 EEG + 18 AUX + 6 Marker + end = expectedPacketSize
         if (packetBufferLen != expectedPacketSize) return;
         if (packetBuffer[0] != BYTE_START) return;
 
@@ -488,11 +783,17 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
             offset += 3;
         }
 
-        // Parse AUX data: 3 channels × 2 bytes = 6 bytes
+        // Parse AUX data: 9 axes × 2 bytes = 18 bytes (accel, gyro, mag)
         for (int ch = 0; ch < NUM_AUX_CHANNELS; ch++) {
             short rawValue = twoBytesToShort(packetBuffer[offset], packetBuffer[offset + 1]);
             parsedAuxValues[ch] = rawValue * scale_fac_accel_G_per_count;
             offset += 2;
+        }
+
+        // Parse Marker data: 6 bytes (raw, not scaled)
+        for (int ch = 0; ch < NUM_MARKER_CHANNELS; ch++) {
+            parsedMarkerValues[ch] = packetBuffer[offset] & 0xFF;
+            offset += 1;
         }
 
         packetCount++;
@@ -512,7 +813,7 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
 
         double timestamp = System.currentTimeMillis() / 1000.0;
 
-        // Build sample: [EEG0..N, Aux0..2, Timestamp, SampleIndex, Marker]
+        // Build sample: [EEG0..N, Aux0..8, Timestamp, SampleIndex, Marker]
         int totalChannels = getTotalChannelCount();
         double[] sample = new double[totalChannels];
         for (int i = 0; i < numEegChannels; i++) {
@@ -523,7 +824,8 @@ class BoardCytonSerialDirect extends Board implements SmoothingCapableBoard {
         }
         sample[numEegChannels + NUM_AUX_CHANNELS] = timestamp;
         sample[numEegChannels + NUM_AUX_CHANNELS + 1] = packetCount % 256;
-        sample[numEegChannels + NUM_AUX_CHANNELS + 2] = 0;
+        // Use first marker channel as the marker value
+        sample[numEegChannels + NUM_AUX_CHANNELS + 2] = (NUM_MARKER_CHANNELS > 0) ? parsedMarkerValues[0] : 0;
 
         synchronized (dataLock) {
             pendingDataQueue.add(sample);
