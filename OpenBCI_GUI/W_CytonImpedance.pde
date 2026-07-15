@@ -157,6 +157,7 @@ class W_CytonImpedance extends Widget {
         headPlotElectrodes.drawElectrodesWithColors(rgb, null);
 
         // Highlight the electrode currently being tested with a green border
+        pushStyle();
         for (int i = 0; i < cytonElectrodeStatus.length && i < numE; i++) {
             int ch = cytonElectrodeStatus[i].getGUIChannelNumber() - 1;
             boolean checking = isDirectSerialBoard ?
@@ -171,6 +172,7 @@ class W_CytonImpedance extends Widget {
                 ellipse(pos[0], pos[1], d + 6, d + 6);
             }
         }
+        popStyle();
 
         headPlotElectrodes.drawElectrodeNames(null);
 
