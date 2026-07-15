@@ -51,7 +51,7 @@ void setupWidgets(PApplet _this, ArrayList<Widget> w){
 
     if (currentBoard instanceof BoardCyton || currentBoard instanceof BoardCytonSerialDirect) {
         w_cytonImpedance = new W_CytonImpedance(_this);
-        w_cytonImpedance.setTitle("Cyton Signal");
+        w_cytonImpedance.setTitle("Impedance");
         addWidget(w_cytonImpedance, w);
     }
 
