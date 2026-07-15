@@ -41,18 +41,21 @@ void processNewData() {
     for (int Ichan=0; Ichan < nchan; Ichan++) is_railed[Ichan].update(dataProcessingRawBuffer[Ichan], Ichan);
 
     //compute the electrode impedance. Do it in a very simple way [rms to amplitude, then uVolt to Volt, then Volt/Amp to Ohm]
-    for (int Ichan=0; Ichan < nchan; Ichan++) {
-        // Calculate the impedance
-        float impedance = (sqrt(2.0)*dataProcessing.data_std_uV[Ichan]*1.0e-6) / BoardCytonConstants.leadOffDrive_amps;
-        // Subtract the 2.2kOhm resistor
-        impedance -= BoardCytonConstants.series_resistor_ohms;
-        // Verify the impedance is not less than 0
-        if (impedance < 0) {
-            // Incase impedance some how dipped below 2.2kOhm
-            impedance = 0;
+    // Skip for BoardCytonSerialDirect — it uses its own impedance command/response
+    if (!(currentBoard instanceof BoardCytonSerialDirect)) {
+        for (int Ichan=0; Ichan < nchan; Ichan++) {
+            // Calculate the impedance
+            float impedance = (sqrt(2.0)*dataProcessing.data_std_uV[Ichan]*1.0e-6) / BoardCytonConstants.leadOffDrive_amps;
+            // Subtract the 2.2kOhm resistor
+            impedance -= BoardCytonConstants.series_resistor_ohms;
+            // Verify the impedance is not less than 0
+            if (impedance < 0) {
+                // Incase impedance some how dipped below 2.2kOhm
+                impedance = 0;
+            }
+            // Store to the global variable
+            data_elec_imp_ohm[Ichan] = impedance;
         }
-        // Store to the global variable
-        data_elec_imp_ohm[Ichan] = impedance;
     }
 }
 
