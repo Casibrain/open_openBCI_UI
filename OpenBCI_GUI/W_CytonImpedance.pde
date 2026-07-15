@@ -28,16 +28,12 @@ class W_CytonImpedance extends Widget {
     private final int tableWidth = 190;
     private int tableHeight = 0;
     private int cellHeight = 10;
-    
-    private final float mapInitialW = 488f;
-    private final float mapInitialH = 488f;
+
     private int imageContainerW, imageContainerH;
-    private PImage cytonHeadplotStatic;
+    private HeadPlotElectrodes headPlotElectrodes;
     private CytonElectrodeStatus[] cytonElectrodeStatus;
-    private int facepad_x, facepad_y, facepad_w;
-    private float facepad_h;
-    private int translate_facepadX, translate_facepadY;
-    private int imageFooterX, imageFooterY; //same width as imageContainerW
+    private int headplotCX, headplotCY, headplotR;
+    private int imageFooterX, imageFooterY;
     private int footerHeight;
 
     private Gif checkingImpedanceOnElectrodeGif;
@@ -141,39 +137,25 @@ class W_CytonImpedance extends Widget {
 
         dataGrid.draw();
 
-        /*
-        pushStyle();
-        stroke(0,0,0,255);
-        fill(0,255,0,50);
-        strokeWeight(3);
-        rect(facepad_x, facepad_y, facepad_w, (int)facepad_h);
-        popStyle();
-        */
-        //Scale the dataImage to fit in inside the widget
-        float s = facepad_w / mapInitialW;
-        /*
-        pushStyle();
-        stroke(0,0,0,255);
-        fill(0,100,142,100);
-        strokeWeight(3);
-        rect(t_facepadX, t_facepadY, facepad_w, (int)facepad_h);
-        popStyle();
-        */
-        pushMatrix(); // save the transformation matrix
-        translate(translate_facepadX, translate_facepadY);
-        scale(s); // scale the transformation matrix
-        /*
-        pushStyle();
-        stroke(0,0,0,255);
-        fill(0,255,0,100);
-        strokeWeight(3);
-        rect(0, 0, mapInitialW, mapInitialH);
-        popStyle();
-        */
-        image(cytonHeadplotStatic, 0, 0);
-        popMatrix(); // restore the transformation matrix
+        // Draw head outline and electrodes using HeadPlotElectrodes component
+        headPlotElectrodes.drawHeadOutline();
 
-        drawUserLeftRightLabels();
+        // Build color array from impedance values
+        int numE = headPlotElectrodes.getNumElectrodes();
+        int[][] rgb = new int[3][numE];
+        for (int i = 0; i < numE; i++) {
+            if (i < cytonElectrodeStatus.length) {
+                ElectrodeState state = cytonElectrodeStatus[i].getElectrodeState();
+                int c = state.getColor();
+                rgb[0][i] = (c >> 16) & 0xFF;
+                rgb[1][i] = (c >> 8) & 0xFF;
+                rgb[2][i] = c & 0xFF;
+            } else {
+                rgb[0][i] = 113; rgb[1][i] = 117; rgb[2][i] = 119; // GREYED_OUT
+            }
+        }
+        headPlotElectrodes.drawElectrodesWithColors(rgb, null);
+        headPlotElectrodes.drawElectrodeNames(null);
 
         imp_buttons_cp5.draw();
         threshold_ui_cp5.draw();
@@ -198,34 +180,22 @@ class W_CytonImpedance extends Widget {
 
         resizeTable();
 
-        imageContainerW = w - padding*3 - tableWidth;
-        imageContainerH = h - padding*2 - navH;
-
-        facepad_x = x + padding*2 + tableWidth;
-        facepad_y = y + padding;
-        facepad_w = w - padding*3 - tableWidth;
-        //println("BEFORE="+facepad_w);
-        //Get scale using container width for facepad divided by original width of image
-        float _scale = facepad_w / mapInitialW;
-        facepad_h = _scale * mapInitialH;
-        if (facepad_h > imageContainerH) {
-            //println("OOPS... FACEPAD WOULD BE TOO BIG, RESIZING TO FIT WIDGET AND KEEP ASPECT RATIO", facepad_h, imageContainerH);
-            facepad_w = Math.round(facepad_w * (imageContainerH / facepad_h));
-            _scale = facepad_w / mapInitialW;
-            facepad_h = _scale * mapInitialH;
-            //println("AFTER=="+facepad_w);
-        }
-
-        //Center the image horizontally and vertically
-        translate_facepadX = (facepad_w < imageContainerW) ? facepad_x + int((imageContainerW - facepad_w) / 2) : facepad_x;
-        translate_facepadY = (facepad_h < imageContainerH) ? facepad_y + (int(imageContainerH/2) - int(facepad_h/2)) : facepad_y;
+        // Position HeadPlotElectrodes on the right side of the table
+        int headX = x + padding*2 + tableWidth;
+        int headY = y + padding + navHeight;
+        int headW = w - padding*3 - tableWidth;
+        int headH = h - padding*2 - navHeight - footerHeight;
+        headplotR = Math.min(headW, headH) / 2 - 10;
+        headplotCX = headX + headW / 2;
+        headplotCY = headY + headH / 2;
+        headPlotElectrodes.setPosition(headplotCX, headplotCY, headplotR);
 
         for (int i = 0; i < cytonElectrodeStatus.length; i++) {
             cytonElectrodeStatus[i].resizeButton(dataGrid);
         }
 
         //Calculate these values last
-        imageFooterX = translate_facepadX + facepad_w / 2; //centered under the visual map container
+        imageFooterX = headplotCX;
         imageFooterY = y + h - footerHeight;
         
         //final int thresholdTF_y = y + tableHeight + padding*2;
@@ -255,18 +225,11 @@ class W_CytonImpedance extends Widget {
     }
 
     private void initCytonImpedanceMap() {
-        if (nchan <= 8) {
-            cytonHeadplotStatic = loadImage("Cyton_8Ch_Static_Headplot_Image.png");
-        } else {
-            cytonHeadplotStatic = loadImage("Cyton_16Ch_Static_Headplot_Image.png");
-        }
+        // Reuse HeadPlotElectrodes component for 32-channel layout
+        headPlotElectrodes = new HeadPlotElectrodes(false);
 
-        // Use all detected channels, up to the number of defined electrode locations
-        int maxElectrodes = CytonElectrodeLocations.values().length;
-        int numElectrodes = Math.min(nchan, maxElectrodes);
-        if (nchan > maxElectrodes) {
-            println("W_CytonImpedance: " + nchan + " channels detected, using " + numElectrodes + " electrode positions");
-        }
+        // Use all detected channels, up to 32
+        int numElectrodes = Math.min(nchan, headPlotElectrodes.getNumElectrodes());
 
         //Instantiate electrodeStatus for all electrodes!
         cytonElectrodeStatus = new CytonElectrodeStatus[numElectrodes];
@@ -337,20 +300,7 @@ class W_CytonImpedance extends Widget {
         println("MASTERCHECKINTERVAL_CHANGE", masterCheckInterval);
     }
     
-    public void drawUserLeftRightLabels() {
-        pushStyle();
-        fill(OPENBCI_DARKBLUE);
-        textAlign(CENTER);
-        textFont(h4, 14);
-        String s = "User Left";
-        float _x = translate_facepadX + facepad_w * .2;
-        float _y = y + 20;
-        text(s, _x , _y);
-        s = "User Right";
-        _x = translate_facepadX + facepad_w * .8;
-        text(s, _x , _y);
-        popStyle();
-    }
+
 
     private void drawImageFooterInfo() {
         //Draw "thresholds" text label below the table under the first column

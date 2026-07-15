@@ -187,8 +187,8 @@ class CytonElectrodeStatus {
     protected DecimalFormat impedanceNF;
     protected DecimalFormat impShortNF;
     //Impedance ranges in kOhms
-    protected double impedanceGreenCutoff = 750d;
-    protected double impedanceYellowCuttoff = 2500d;
+    protected double impedanceGreenCutoff = 5000d;
+    protected double impedanceYellowCuttoff = 10000d;
     //Anything greater than impedanceYellowCuttoff is red
     private boolean isCheckingAnotherElectrode = false;
     protected boolean isInImpedanceMode = false;
